@@ -3,8 +3,11 @@ import sys
 import json
 from PIL import Image
 from rectpack import newPacker
+import numpy as np
 
-GEN_FILENAME = "_gen_sheet.png"
+GEN_IMAGENAME = "_gen_sheet.png"
+GEN_METNAME = "_gen_meta.json"
+GEN_DIMENSIONS = (256, 256)
 
 class Sprite:
 	def __init__(self, name, imagefile, *, subsprites={}):
@@ -32,10 +35,13 @@ for path, dirs, files in os.walk(script_path):
 	dir_images = {}
 	dir_metas = {}
 	for filename in files:
-		if filename.endswith(".png") and filename != GEN_FILENAME:
+		if filename.endswith(".png") and filename != GEN_IMAGENAME:
 			filepath = os.path.join(path, filename)
 			spritename = filename.rsplit(".", 1)[0]
-			dir_images[spritename] = Image.open(filepath)
+			image = Image.open(filepath)
+			if image.mode == "P":
+				image = image.convert("RGBA")
+			dir_images[spritename] = image
 		elif filename.endswith(".json"):
 			filepath = os.path.join(path, filename)
 			spritename = filename.rsplit(".", 1)[0]
@@ -89,7 +95,11 @@ for freq, color in palette_freq:
 	print("{:5.2f}%:".format(freq), color)
 print("Palette size:", len(palette) + 1)
 
-palette_list = [0, 0, 0] + [a for c in palette.keys() for a in c]
+palette_indices = {c : i + 1 for i, c in enumerate(palette.keys())}
+palette_list = [0, 0, 0] + [a for c in palette_indices.keys() for a in c]
+
+def palettise(ca):
+	return np.uint8(palette_indices[(*ca[:3],)] if ca[3] else 0)
 
 if len(palette) > 255:
 	print("ERR! Palette is too large!")
@@ -104,22 +114,22 @@ packer = newPacker()
 
 for s in all_images:
 	packer.add_rect(s.width, s.height, s)
-packer.add_bin(256, 256) # Use one 256x256 sheet
+packer.add_bin(*GEN_DIMENSIONS)
 packer.pack()
 
-sheet = Image.new("P", (256, 256))
+sheet = Image.new("P", GEN_DIMENSIONS)
 sheet.putpalette(palette_list)
 
 all_subsprites = {}
 for _, x, y, w, h, sprite in packer.rect_list():
 	all_images.remove(sprite)
 	
-	palettised = sprite.imagefile.convert("P", palette=palette_list)
-	# TODO: Manual palettisation (keep transparency, map palette correctly.)
-	# Use numpy.
-	# palettised.show()
-	print(palettised.getpalette())
-	sheet.paste(palettised, (x, y))
+	# Palettise	
+	sprite_arr = np.array(sprite.imagefile, dtype=np.uint8)
+	sprite_arr = np.apply_along_axis(palettise, 2, sprite_arr)
+	sprite_im = Image.fromarray(sprite_arr, "P")
+	sprite_im.putpalette(palette_list)
+	sheet.paste(sprite_im, (x, y))
 	
 	for spritename, bounds in sprite.subsprites.items():
 		all_subsprites[spritename] = (
@@ -131,4 +141,6 @@ if len(all_images):
 		print(i)
 	sys.exit(1)
 
-sheet.save(GEN_FILENAME, optimize=True, transparency=0)
+sheet.save(GEN_IMAGENAME, optimize=True, transparency=0)
+with open(GEN_METNAME, "w") as metafile:
+	json.dump({"sprites": all_subsprites}, metafile)
