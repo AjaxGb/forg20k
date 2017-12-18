@@ -6,7 +6,7 @@ from rectpack import newPacker
 import numpy as np
 
 GEN_IMAGENAME = "_gen_sheet.png"
-GEN_METNAME = "_gen_meta.json"
+GEN_METNAME = "_gen_meta.js"
 GEN_DIMENSIONS = (256, 256)
 
 class Sprite:
@@ -142,5 +142,13 @@ if len(all_images):
 	sys.exit(1)
 
 sheet.save(GEN_IMAGENAME, optimize=True, transparency=0)
+
+##########################
+## WRITE JS WITH BOUNDS ##
+##########################
+
 with open(GEN_METNAME, "w") as metafile:
-	json.dump({"sprites": all_subsprites}, metafile)
+	print("sb={", ",".join([
+		name + ":[" + ",".join(str(b) for b in bounds) + "]"
+		for name, bounds in all_subsprites.items()
+	]), "}", file=metafile, sep="", end="")
