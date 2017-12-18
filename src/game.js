@@ -22,11 +22,16 @@ createImageBitmap(new Blob([sa],{type: png})).then(s=>{
 	// Draw favicon
 	g = drawSprite(c.getContext('2d'), "small_logo");
 	ic.href = c.toDataURL();
-	c.width = 450;
-	c.height = 300;
+	c.width = 225;
+	c.height = 150;
 	g.imageSmoothingEnabled = false;
 	
 	drawSprite(g, "logo", 0, 0, 2);
 	
+	for (let y = 0; y < 10; y++) {
+		for (let x = 0; x < 10; x++) {
+			drawSprite(g, "grass_tile", x*48 + (y%2 ? 0 : 24), y*8);
+		}
+	}
 	
 });

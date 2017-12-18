@@ -5,9 +5,9 @@ from PIL import Image
 from rectpack import newPacker
 import numpy as np
 
-GEN_IMAGENAME = "_gen_sheet.png"
-GEN_METNAME = "_gen_meta.js"
-GEN_DIMENSIONS = (256, 256)
+sprites_path = sys.argv[1]
+gen_imagename, gen_metaname = sys.argv[2], sys.argv[3]
+gen_dimensions = (int(sys.argv[4]), int(sys.argv[4]))
 
 class Sprite:
 	def __init__(self, name, imagefile, *, subsprites={}):
@@ -21,8 +21,7 @@ class Sprite:
 		return "<Sprite '{}' file={} sub={}>".format(
 			self.name, self.imagefile.filename, self.subsprites)
 
-script_path = os.path.dirname(__file__)
-print("Compiling sprites in", script_path)
+print("Compiling sprites in", sprites_path)
 print()
 
 #################################
@@ -31,11 +30,11 @@ print()
 
 all_images = set()
 
-for path, dirs, files in os.walk(script_path):
+for path, dirs, files in os.walk(sprites_path):
 	dir_images = {}
 	dir_metas = {}
 	for filename in files:
-		if filename.endswith(".png") and filename != GEN_IMAGENAME:
+		if filename.endswith(".png") and filename != gen_imagename:
 			filepath = os.path.join(path, filename)
 			spritename = filename.rsplit(".", 1)[0]
 			image = Image.open(filepath)
@@ -114,10 +113,10 @@ packer = newPacker()
 
 for s in all_images:
 	packer.add_rect(s.width, s.height, s)
-packer.add_bin(*GEN_DIMENSIONS)
+packer.add_bin(*gen_dimensions)
 packer.pack()
 
-sheet = Image.new("P", GEN_DIMENSIONS)
+sheet = Image.new("P", gen_dimensions)
 sheet.putpalette(palette_list)
 
 all_subsprites = {}
@@ -141,13 +140,13 @@ if len(all_images):
 		print(i)
 	sys.exit(1)
 
-sheet.save(GEN_IMAGENAME, optimize=True, transparency=0)
+sheet.save(gen_imagename, optimize=True, transparency=0)
 
 ##########################
 ## WRITE JS WITH BOUNDS ##
 ##########################
 
-with open(GEN_METNAME, "w") as metafile:
+with open(gen_metaname, "w") as metafile:
 	print("sb={", ",".join([
 		name + ":[" + ",".join(str(b) for b in bounds) + "]"
 		for name, bounds in all_subsprites.items()
