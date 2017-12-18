@@ -1,2 +1,3 @@
 src/sprites/_gen_sheet.png
-src/sprites/_gen_meta.json
+src/sprites/_gen_meta.js
+src/imtxt.js
