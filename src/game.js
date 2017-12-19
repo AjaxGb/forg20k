@@ -1,6 +1,13 @@
+SCREEN_WIDTH = 225;
+SCREEN_HEIGHT = 153;
+MOUSE_NONE = 0;
+MOUSE_VIEW_DRAG = 1;
+
 png = "image/png";
 doc = document;
 cEl = doc.createElement.bind(doc);
+for (n of ["min","max"]) window[n] = Math[n];
+clamp = (x, a, b) => min(max(x, a), b);
 makeCanvas = (w,h) => (
 	c = cEl("canvas"),
 	c.width = w,
@@ -52,7 +59,7 @@ setT = (m,x,y,t,r) => r = (m[y], r[x - r[0] + 1] = t);
  */
 
 loadMap = (m) => {
-	currMap = {t:[]};
+	currMap = {t: [], w: m.w * 24 - SCREEN_WIDTH + 8, h: m.h * 16};
 	let x, y, r;
 	for (y = 0; y < m.h; ++y) {
 		currMap.t[y] = [];
@@ -89,13 +96,13 @@ createImageBitmap(new Blob([sa],{type: png})).then(s=>{
 		c = c || 1,
 		g.drawImage(s, ...b, x|0, y|0, b[2]*c, b[3]*c),
 		g);
-	clear = () => g.clearRect(0, 0, 225, 153);
+	clear = () => g.clearRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 	
 	// Draw favicon
 	g = drawSprite(c.getContext('2d'), "small_logo");
 	ic.href = c.toDataURL();
-	c.width = 225;
-	c.height = 153;
+	c.width = SCREEN_WIDTH;
+	c.height = SCREEN_HEIGHT;
 	g.imageSmoothingEnabled = 0;
 	
 	drawSprite(g, "logo", 0, 0, 2);
@@ -108,8 +115,6 @@ createImageBitmap(new Blob([sa],{type: png})).then(s=>{
  * 1 - View drag
  */
 mSt = 0;
-MOUSE_NONE = 0;
-MOUSE_VIEW_DRAG = 1;
 
 eToCan = (e) => scrToCan(e.screenX, e.screenY);
 c.onmousedown = (e) => {
@@ -124,8 +129,8 @@ c.onmousedown = (e) => {
 onmousemove = (e) => {
 	switch (mSt) {
 	case MOUSE_VIEW_DRAG:
-		vX = drStCX + (drStMX - e.screenX)/4 |0;
-		vY = drStCY + (drStMY - e.screenY)/4 |0;
+		vX = clamp(drStCX + (drStMX - e.screenX)/4 |0, 0, currMap.w);
+		vY = clamp(drStCY + (drStMY - e.screenY)/4 |0, 0, currMap.h);
 		drawMap(currMap);
 		break;
 	}
