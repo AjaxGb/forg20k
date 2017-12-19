@@ -6,6 +6,9 @@ makeCanvas = (w,h) => (
 	c.width = w,
 	c.height = h,
 	c.getContext("2d"));
+scrToCan = (x, y, r) => (
+	r = c.getBoundingClientRect(),
+	[(x - r.x) / 4, (y - r.x) / 4]);
 
 sa = new Uint8Array(s.length*7/8);
 for (i = j = 0; i < s.length; ++i, ++j) {
@@ -66,16 +69,16 @@ loadMap = (m) => {
 	}
 };
 loadMap(maps.test);
+vX = vY = 0;
 
-hexToOff = (x, y) => [x, -x-y+(x-(x&1))/2];
-hexToPix = (x, y) => [24 * x, 16 * (y + x/2)];
+hexToPix = (x, y, ox, oy) => [24 * x - ox, 16 * (y + x/2) - oy];
 
 drawMap = (m) => {
-	let x, y, c, r;
+	let x, y;
+	clear();
 	for (y = m.t.length - 1; y >= 0; --y) {
 		for (x = m.t[y].length - 1; x >= 0; --x) {
-			[c, r] = hexToOff(x,y);
-			drawSprite(g, m.t[y][x].b, ...hexToPix(x, y));
+			drawSprite(g, m.t[y][x].b, ...hexToPix(x, y, vX, vY));
 		}
 	}
 };
@@ -86,6 +89,7 @@ createImageBitmap(new Blob([sa],{type: png})).then(s=>{
 		c = c || 1,
 		g.drawImage(s, ...b, x|0, y|0, b[2]*c, b[3]*c),
 		g);
+	clear = () => g.clearRect(0, 0, 225, 153);
 	
 	// Draw favicon
 	g = drawSprite(c.getContext('2d'), "small_logo");
@@ -96,10 +100,42 @@ createImageBitmap(new Blob([sa],{type: png})).then(s=>{
 	
 	drawSprite(g, "logo", 0, 0, 2);
 	
-	// for (let y = 0; y < 20; y++) {
-	// 	for (let x = 0; x < 10; x++) {
-	// 		drawSprite(g, "32_grass", x*48 + (y%2 ? 0 : 24), y*8);
-	// 	}
-	// }
 	drawMap(currMap)
 });
+
+/* Mouse state:
+ * 0 - Up
+ * 1 - View drag
+ */
+mSt = 0;
+MOUSE_NONE = 0;
+MOUSE_VIEW_DRAG = 1;
+
+eToCan = (e) => scrToCan(e.screenX, e.screenY);
+sLstM = (x,y) => {
+	lstMX = x;
+	lstMY = y;
+};
+c.onmousedown = (e, x,y) => {
+	[x, y] = eToCan(e);
+	if (e.button === 0) { // Start drag view
+		mSt = MOUSE_VIEW_DRAG;
+	}
+	sLstM(x,y);
+};
+onmousemove = (e, x,y) => {
+	[x, y] = eToCan(e);
+	switch (mSt) {
+	case MOUSE_VIEW_DRAG:
+		vX += lstMX - x;
+		vY += lstMY - y;
+		drawMap(currMap);
+		break;
+	}
+	sLstM(x,y);
+};
+onmouseup = (e, x,y) => {
+	[x, y] = eToCan(e);
+	mSt = MOUSE_NONE;
+	sLstM(x,y);
+};
