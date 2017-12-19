@@ -112,30 +112,24 @@ MOUSE_NONE = 0;
 MOUSE_VIEW_DRAG = 1;
 
 eToCan = (e) => scrToCan(e.screenX, e.screenY);
-sLstM = (x,y) => {
-	lstMX = x;
-	lstMY = y;
-};
-c.onmousedown = (e, x,y) => {
-	[x, y] = eToCan(e);
-	if (e.button === 0) { // Start drag view
+c.onmousedown = (e) => {
+	if (mSt === MOUSE_NONE && e.button === 0) { // Start drag view
 		mSt = MOUSE_VIEW_DRAG;
+		drStMX = e.screenX;
+		drStMY = e.screenY;
+		drStCX = vX;
+		drStCY = vY;
 	}
-	sLstM(x,y);
 };
-onmousemove = (e, x,y) => {
-	[x, y] = eToCan(e);
+onmousemove = (e) => {
 	switch (mSt) {
 	case MOUSE_VIEW_DRAG:
-		vX += lstMX - x;
-		vY += lstMY - y;
+		vX = drStCX + (drStMX - e.screenX)/4 |0;
+		vY = drStCY + (drStMY - e.screenY)/4 |0;
 		drawMap(currMap);
 		break;
 	}
-	sLstM(x,y);
 };
-onmouseup = (e, x,y) => {
-	[x, y] = eToCan(e);
+onmouseup = (e) => {
 	mSt = MOUSE_NONE;
-	sLstM(x,y);
 };
