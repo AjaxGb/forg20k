@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import re
 from PIL import Image
 from rectpack import newPacker
 import numpy as np
@@ -145,9 +146,9 @@ sheet.save(gen_imagename, optimize=True, transparency=0)
 ##########################
 ## WRITE JS WITH BOUNDS ##
 ##########################
-
 with open(gen_metaname, "w") as metafile:
 	print("sb={", ",".join([
-		name + ":[" + ",".join(str(b) for b in bounds) + "]"
+		(name if re.match("^[a-zA-Z_]\\w*$", name) else '"{}"'.format(name))
+		+ ":[" + ",".join(str(b) for b in bounds) + "]"
 		for name, bounds in all_subsprites.items()
-	]), "}", file=metafile, sep="", end="")
+	]), "};", file=metafile, sep="", end="")

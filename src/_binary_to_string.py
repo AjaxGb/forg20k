@@ -31,5 +31,5 @@ def read_to_string(filename):
 if __name__ == '__main__':
 	import sys
 	with open(sys.argv[2], "w") as file:
-		print(sys.argv[3], "=",read_to_string(sys.argv[1]),
+		print(sys.argv[3], "=", read_to_string(sys.argv[1]), ";",
 			file=file, sep="", end="")
