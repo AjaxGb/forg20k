@@ -2,20 +2,22 @@ SCREEN_WIDTH = 225;
 SCREEN_HEIGHT = 153;
 MOUSE_NONE = 0;
 MOUSE_VIEW_DRAG = 1;
+TILE_HEIGHT = 16;
+TILE_SPREAD = 24;
+TILE_CAP_WIDTH = 8;
 
 png = "image/png";
 doc = document;
 cEl = doc.createElement.bind(doc);
+
 for (n of ["min","max"]) window[n] = Math[n];
 clamp = (x, a, b) => min(max(x, a), b);
-makeCanvas = (w,h) => (
+
+makeCanvas = (w, h, c) => (
 	c = cEl("canvas"),
 	c.width = w,
 	c.height = h,
 	c.getContext("2d"));
-scrToCan = (x, y, r) => (
-	r = c.getBoundingClientRect(),
-	[(x - r.x) / 4, (y - r.x) / 4]);
 
 sa = new Uint8Array(s.length*7/8);
 for (i = j = 0; i < s.length; ++i, ++j) {
@@ -59,7 +61,7 @@ setT = (m,x,y,t,r) => r = (m[y], r[x - r[0] + 1] = t);
  */
 
 loadMap = (m) => {
-	currMap = {t: [], w: m.w * 24 - SCREEN_WIDTH + 8, h: m.h * 16};
+	currMap = {t: [], w: m.w * TILE_SPREAD - SCREEN_WIDTH + TILE_CAP_WIDTH, h: m.h * TILE_HEIGHT};
 	let x, y, r;
 	for (y = 0; y < m.h; ++y) {
 		currMap.t[y] = [];
@@ -78,16 +80,21 @@ loadMap = (m) => {
 loadMap(maps.test);
 vX = vY = 0;
 
-hexToPix = (x, y, ox, oy) => [24 * x - ox, 16 * (y + x/2) - oy];
+
+scrToCan = (x, y, r) => (
+	r = c.getBoundingClientRect(),
+	[(x - r.x) / 4, (y - r.y) / 4]);
+eToCan = (e) => scrToCan(e.screenX, e.screenY);
+hexToCan = (x, y, ox, oy) => [TILE_SPREAD * x - ox |0, TILE_HEIGHT * (y + x/2) - oy |0];
+canToHex = (x, y, ox, oy, t) => (t = (x + ox) / TILE_SPREAD, [t, (y + oy) / TILE_HEIGHT - t/2 - 1]);
+eToHex = (e, ox, oy) => canToHex(...eToCan(e), ox, oy);
 
 drawMap = (m) => {
 	let x, y;
 	clear();
-	for (y = m.t.length - 1; y >= 0; --y) {
-		for (x = m.t[y].length - 1; x >= 0; --x) {
-			drawSprite(g, m.t[y][x].b, ...hexToPix(x, y, vX, vY));
-		}
-	}
+	for (y = m.t.length - 1; y >= 0; --y)
+		for (x = m.t[y].length - 1; x >= 0; --x)
+			drawSprite(g, m.t[y][x].b, ...hexToCan(x, y, vX, vY));
 };
 
 createImageBitmap(new Blob([sa],{type: png})).then(s=>{
@@ -101,9 +108,11 @@ createImageBitmap(new Blob([sa],{type: png})).then(s=>{
 	// Draw favicon
 	g = drawSprite(c.getContext('2d'), "small_logo");
 	ic.href = c.toDataURL();
+	
 	c.width = SCREEN_WIDTH;
 	c.height = SCREEN_HEIGHT;
 	g.imageSmoothingEnabled = 0;
+	g.font = "7px consolas";
 	
 	drawSprite(g, "logo", 0, 0, 2);
 	
@@ -116,7 +125,6 @@ createImageBitmap(new Blob([sa],{type: png})).then(s=>{
  */
 mSt = 0;
 
-eToCan = (e) => scrToCan(e.screenX, e.screenY);
 c.onmousedown = (e) => {
 	if (mSt === MOUSE_NONE && e.button === 0) { // Start drag view
 		mSt = MOUSE_VIEW_DRAG;
@@ -134,6 +142,12 @@ onmousemove = (e) => {
 		drawMap(currMap);
 		break;
 	}
+	
+	let hex = eToHex(e, vX, vY);
+	let pix = hexToCan(...hex, vX, vY);
+	p.innerHTML = pix + "; " + hex;
+	g.fillStyle = "#FFF";
+	g.fillRect(...pix, 1, 1);
 };
 onmouseup = (e) => {
 	mSt = MOUSE_NONE;
