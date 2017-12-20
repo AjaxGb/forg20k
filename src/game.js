@@ -1,16 +1,25 @@
+// CONSTANTS
 SCREEN_WIDTH = 225;
 SCREEN_HEIGHT = 153;
+
 MOUSE_NONE = 0;
 MOUSE_VIEW_DRAG = 1;
+
 TILE_HEIGHT = 16;
+TILE_HALF_HEIGHT = 8;
+TILE_HALF_HEIGHT_P1 = TILE_HALF_HEIGHT + 1;
 TILE_SPREAD = 24;
 TILE_CAP_WIDTH = 8;
+TILE_WIDTH = 32;
+TILE_HALF_WIDTH = 16;
+
+SCREEN_WIDTH_PCAP = SCREEN_WIDTH + TILE_CAP_WIDTH;
 
 png = "image/png";
 doc = document;
 cEl = doc.createElement.bind(doc);
 
-for (n of ["min","max"]) window[n] = Math[n];
+for (n of ["min","max","round","abs"]) window[n] = Math[n];
 clamp = (x, a, b) => min(max(x, a), b);
 
 makeCanvas = (w, h, c) => (
@@ -29,12 +38,10 @@ for (i = j = 0; i < s.length; ++i, ++j) {
 
 tiles = [
 	{
-		b: "32_grass",
-		s: "16_grass"
+		s: "grass"
 	},
 	{
-		b: "32_dirt",
-		s: "16_dirt"
+		s: "dirt"
 	}
 ]
 maps = {
@@ -61,7 +68,12 @@ setT = (m,x,y,t,r) => r = (m[y], r[x - r[0] + 1] = t);
  */
 
 loadMap = (m) => {
-	currMap = {t: [], w: m.w * TILE_SPREAD - SCREEN_WIDTH + TILE_CAP_WIDTH, h: m.h * TILE_HEIGHT};
+	currMap = {
+		f: m,
+		t: [],
+		w: m.w * TILE_SPREAD - TILE_CAP_WIDTH,
+		h: m.h * TILE_HEIGHT + (m.w - 2) * TILE_HALF_HEIGHT
+	};
 	let x, y, r;
 	for (y = 0; y < m.h; ++y) {
 		currMap.t[y] = [];
@@ -78,8 +90,7 @@ loadMap = (m) => {
 	}
 };
 loadMap(maps.test);
-vX = vY = 0;
-
+vp = new DOMRect(-TILE_HALF_WIDTH, -TILE_HALF_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT);
 
 scrToCan = (x, y, r) => (
 	r = c.getBoundingClientRect(),
@@ -88,13 +99,25 @@ eToCan = (e) => scrToCan(e.screenX, e.screenY);
 hexToCan = (x, y, ox, oy) => [TILE_SPREAD * x - ox |0, TILE_HEIGHT * (y + x/2) - oy |0];
 canToHex = (x, y, ox, oy, t) => (t = (x + ox) / TILE_SPREAD, [t, (y + oy) / TILE_HEIGHT - t/2 - 1]);
 eToHex = (e, ox, oy) => canToHex(...eToCan(e), ox, oy);
+offVec = (v, ox, oy) => [v[0] + ox, v[1] + oy];
+roundHex = (x, y, z,rx,ry,rz,dx,dy,dz) => (
+	z = -x-y,
+	rx = round(x), ry = round(y), rz = round(z),
+	dx = abs(rx-x), dy = abs(ry-y), dz = abs(rz-z),
+	dx > dy && dx > dz
+		? [-ry-rz, ry]
+		: dy > dz
+			? [rx, -rx-rz]
+			: [rx, ry]
+);
 
 drawMap = (m) => {
 	let x, y;
 	clear();
 	for (y = m.t.length - 1; y >= 0; --y)
 		for (x = m.t[y].length - 1; x >= 0; --x)
-			drawSprite(g, m.t[y][x].b, ...hexToCan(x, y, vX, vY));
+			drawSprite(g, m.t[y][x].s, ...hexToCan(x, y,
+				vp.x + TILE_HALF_WIDTH, vp.y + TILE_HALF_HEIGHT));
 };
 
 createImageBitmap(new Blob([sa],{type: png})).then(s=>{
@@ -106,7 +129,7 @@ createImageBitmap(new Blob([sa],{type: png})).then(s=>{
 	clear = () => g.clearRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 	
 	// Draw favicon
-	g = drawSprite(c.getContext('2d'), "small_logo");
+	g = drawSprite(c.getContext('2d'), "favicon");
 	ic.href = c.toDataURL();
 	
 	c.width = SCREEN_WIDTH;
@@ -130,24 +153,36 @@ c.onmousedown = (e) => {
 		mSt = MOUSE_VIEW_DRAG;
 		drStMX = e.screenX;
 		drStMY = e.screenY;
-		drStCX = vX;
-		drStCY = vY;
+		drStCX = vp.x;
+		drStCY = vp.y;
 	}
 };
 onmousemove = (e) => {
 	switch (mSt) {
 	case MOUSE_VIEW_DRAG:
-		vX = clamp(drStCX + (drStMX - e.screenX)/4 |0, 0, currMap.w);
-		vY = clamp(drStCY + (drStMY - e.screenY)/4 |0, 0, currMap.h);
+		vp.x = clamp(drStCX + (drStMX - e.screenX)/4 |0,
+			-TILE_HALF_WIDTH, currMap.w - vp.width);
+		vp.y = clamp(drStCY + (drStMY - e.screenY)/4 |0,
+			-TILE_HALF_HEIGHT, currMap.h - vp.height);
 		drawMap(currMap);
 		break;
 	}
 	
-	let hex = eToHex(e, vX, vY);
-	let pix = hexToCan(...hex, vX, vY);
-	p.innerHTML = pix + "; " + hex;
-	g.fillStyle = "#FFF";
-	g.fillRect(...pix, 1, 1);
+	drawMap(currMap);
+	
+	let hex = eToHex(e, vp.x, vp.y);
+	
+	g.beginPath();
+	g.moveTo(...hexToCan(...hex, vp.x, vp.y));
+	
+	let rHex = roundHex(...hex);
+	let rCan = hexToCan(...rHex, vp.x, vp.y);
+	g.lineTo(...rCan);
+	g.stroke();
+	
+	drawSprite(g, "highlight", ...offVec(rCan, -TILE_HALF_WIDTH, -TILE_HALF_HEIGHT));
+	
+	p.innerHTML = hex + "->" + rHex;
 };
 onmouseup = (e) => {
 	mSt = MOUSE_NONE;
