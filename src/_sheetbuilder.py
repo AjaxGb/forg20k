@@ -10,13 +10,24 @@ sprites_path = sys.argv[1]
 gen_imagename, gen_metaname = sys.argv[2], sys.argv[3]
 gen_dimensions = (int(sys.argv[4]), int(sys.argv[4]))
 
+class SubSprite:
+	def __init__(self, bounds, origin=(0, 0)):
+		self.bounds = bounds
+		self.origin = origin
+	
+	def offset(self, dx, dy):
+		x, y, w, h = self.bounds
+		return SubSprite((x + dx, y + dy, w, h), self.origin)
+
 class Sprite:
-	def __init__(self, name, imagefile, *, subsprites={}):
+	def __init__(self, name, imagefile, *, origin=(0, 0), subsprites={}):
 		self.name = name
 		self.imagefile = imagefile
 		self.width, self.height = imagefile.size
-		self.subsprites = {name: (0, 0, self.width, self.height)}
-		self.subsprites.update(subsprites)
+		self.subsprites = {subname: SubSprite(subbounds)
+			for subname, subbounds in subsprites.items()}
+		self.subsprites[name] = SubSprite(
+			(0, 0, self.width, self.height), origin)
 	
 	def __str__(self):
 		return "<Sprite '{}' file={} sub={}>".format(
@@ -52,15 +63,17 @@ for path, dirs, files in os.walk(sprites_path):
 		if metafilepath != None:
 			with open(metafilepath) as metafile:
 				metadata = json.load(metafile)
-			subsprites = metadata["subsprites"]
+			subsprites = metadata.get("subsprites", {})
+			origin = metadata.get("origin", (0, 0))
 			
 			print("Found meta for", "'{}'".format(spritename), "containing",
 				len(subsprites), "subsprites.")
 		else:
 			subsprites = {}
+			origin = (0, 0)
 		
 		all_images.add(
-			Sprite(spritename, image, subsprites=subsprites))
+			Sprite(spritename, image, origin=origin, subsprites=subsprites))
 
 print("Found", len(all_images), "image files.")
 
@@ -119,7 +132,7 @@ packer.pack()
 
 sheet = Image.new("P", gen_dimensions)
 sheet.putpalette(palette_list)
-
+		
 all_subsprites = {}
 for _, x, y, w, h, sprite in packer.rect_list():
 	all_images.remove(sprite)
@@ -131,9 +144,9 @@ for _, x, y, w, h, sprite in packer.rect_list():
 	sprite_im.putpalette(palette_list)
 	sheet.paste(sprite_im, (x, y))
 	
-	for spritename, bounds in sprite.subsprites.items():
-		all_subsprites[spritename] = (
-			x + bounds[0], y + bounds[1], bounds[2], bounds[3])
+	all_subsprites.update(sprite.subsprites)
+	for spritename, subsprite in sprite.subsprites.items():
+		all_subsprites[spritename] = subsprite.offset(x, y)
 
 if len(all_images):
 	print("ERR!", len(all_images), "sprites could not be fit:")
@@ -149,6 +162,10 @@ sheet.save(gen_imagename, optimize=True, transparency=0)
 with open(gen_metaname, "w") as metafile:
 	print("sb={", ",".join([
 		(name if re.match("^[a-zA-Z_]\\w*$", name) else '"{}"'.format(name))
-		+ ":[" + ",".join(str(b) for b in bounds) + "]"
-		for name, bounds in all_subsprites.items()
+		+ ":{"
+			+ (("o:[" + ",".join(str(o) for o in subsprite.origin) + "],")
+				if subsprite.origin != (0, 0) else "")
+			+ "b:[" + ",".join(str(b) for b in subsprite.bounds)
+		+ "]}"
+		for name, subsprite in all_subsprites.items()
 	]), "};", file=metafile, sep="", end="")
