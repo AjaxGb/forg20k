@@ -87,6 +87,8 @@ strP = (x, y) => x + "," + y;
  */
 
 vp = new DOMRect(-9e9, -9e9, SCREEN_WIDTH, SCREEN_HEIGHT);
+sE = 0;
+d = 0;
 loadMap = (m) => {
 	let ay = (m.w - 1)/2 |0,
 	c = {
@@ -131,6 +133,10 @@ drawTiles = (t, x,y) => {
 			drawSprite(g, t[y][x].s, ...hexToCan(x + t[y][0] - 1, y,
 				vp.x + TILE_HALF_WIDTH, vp.y + TILE_HALF_HEIGHT));
 };
+drawSelect = (s) => {
+	drawSprite(g, "highlight", ...hexToCan(...s.p,
+		vp.x + TILE_HALF_WIDTH, vp.y + TILE_HALF_HEIGHT));
+};
 drawEnt = (e, i) => {
 	sortEnt(e); // TODO! Move elsewhere
 	for (i of e)
@@ -139,7 +145,15 @@ drawEnt = (e, i) => {
 drawMap = (m) => {
 	clear();
 	drawTiles(m.t);
+	sE && (
+		drawSelect(sE),
+		g.strokeStyle = "red",
+		g.beginPath(),
+		g.moveTo(...hexToCan(...sE.p, vp.x, vp.y)),
+		g.lineTo(...scrToCan(...mP)),
+		g.stroke());
 	drawEnt(m.e);
+	d = 0;
 };
 
 clampVP = (v, b) => {
@@ -154,10 +168,10 @@ clampVP(vp, currMap.camb);
 scrToCan = (x, y, r) => (
 	r = c.getBoundingClientRect(),
 	[(x - r.x) / 4, (y - r.y) / 4]);
-eToCan = (e) => scrToCan(e.screenX, e.screenY);
+eToCan = (e) => scrToCan(e.pageX, e.pageY);
 compHexY = (a, b) => a[1] + a[0]/2 - b[1] - b[0]/2;
 hexToCan = (x, y, ox, oy) => [TILE_SPREAD * x - ox |0, TILE_HEIGHT * (y + x/2) - oy |0];
-canToHex = (x, y, ox, oy, t) => (t = (x + ox) / TILE_SPREAD, [t, (y + oy) / TILE_HEIGHT - t/2 - 1]);
+canToHex = (x, y, ox, oy, t) => (t = (x + ox) / TILE_SPREAD, [t, (y + oy) / TILE_HEIGHT - t/2]);
 eToHex = (e, ox, oy) => canToHex(...eToCan(e), ox, oy);
 offVec = (v, ox, oy) => [v[0] + ox, v[1] + oy];
 roundHex = (x, y, z,rx,ry,rz,dx,dy,dz) => (
@@ -203,29 +217,44 @@ createImageBitmap(new Blob([sa],{type: png})).then(s=>{
  */
 mSt = 0;
 
-c.onmousedown = (e) => {
-	if (mSt === MOUSE_NONE && e.button === 0) { // Start drag view
-		mSt = MOUSE_VIEW_DRAG;
-		drStMX = e.screenX;
-		drStMY = e.screenY;
-		drStCX = vp.x;
-		drStCY = vp.y;
+c.onmousedown = (e, t) => {
+	if (mSt == MOUSE_NONE && e.button == 0) {
+		if (t = currMap.ep[strP(...roundHex(...eToHex(e, vp.x, vp.y)))])
+			sE = (sE == t) ? 0 : t;
+		else
+			mSt = MOUSE_VIEW_DRAG,
+			drStMX = e.pageX,
+			drStMY = e.pageY,
+			drStCX = vp.x,
+			drStCY = vp.y;
+		d = 1;
 	}
+	
+	d && drawMap(currMap);
 };
-onmousemove = (e) => {
+onmousemove = (e, h) => {
+	mP = [e.pageX, e.pageY];
+	
 	switch (mSt) {
 	case MOUSE_VIEW_DRAG:
-		vp.x = drStCX + (drStMX - e.screenX)/4 |0;
-		vp.y = drStCY + (drStMY - e.screenY)/4 |0;
+		vp.x = drStCX + (drStMX - e.pageX)/4 |0;
+		vp.y = drStCY + (drStMY - e.pageY)/4 |0;
 		clampVP(vp, currMap.camb);
-		drawMap(currMap);
+		d = 1;
 		break;
 	}
 	
-	// drawSprite(g, "highlight", ...offVec(rCan, -TILE_HALF_WIDTH, -TILE_HALF_HEIGHT));
+	if (sE) d = 1;
 	
-	p.innerHTML = roundHex(...eToHex(e, vp.x, vp.y));
+	p.innerHTML = roundHex(...eToHex(e, vp.x, vp.y))
+		+ "<br>" + mP;
+	d && drawMap(currMap);
 };
 onmouseup = (e) => {
-	mSt = MOUSE_NONE;
+	switch (mSt) {
+	case MOUSE_VIEW_DRAG:
+		if (e.button == 0) mSt = MOUSE_NONE;
+		break;
+	}
 };
+c.oncontextmenu = (e) => !1;
