@@ -72,26 +72,28 @@ for (n in ent)
 		drawSprite(g, e.i.s, ...hexToCan(...e.p, vp.x, vp.y))),
 	e.de = e.de || ((e) => drawSelect(e)),
 	e.dl = e.dl || ((e, x,y,f,c,d) => {
-		[x, y] = hexToCan(...e.p, vp.x, vp.y);
-		y -= e.i.h;
-		f = hexToCan(...mH, vp.x, vp.y);
-		
-		bStr(g, "red", 2, ...f);
-		g.setLineDash([15, 5]);
-		g.lineDashOffset = t / 50;
-		
-		g.quadraticCurveTo(avg(x, f[0]), avg(y, f[1]) - 100, x, y);
-		g.stroke();
-		
-		g.setLineDash([]);
-		
-		if (cM.ep[mH])
-			x = f[0] - 7,
-			a = f[0] + 7,
-			y = f[1] - 3,
-			b = f[1] + 3,
-			line(g, x, y, a, b),
-			line(g, x, b, a, y);
+		if (e.p[0] != mH[0] || e.p[1] != mH[1]) {
+			[x, y] = hexToCan(...e.p, vp.x, vp.y);
+			y -= e.i.h;
+			f = hexToCan(...mH, vp.x, vp.y);
+			
+			bStr(g, "red", 2, ...f);
+			g.setLineDash([15, 5]);
+			g.lineDashOffset = t / 50;
+			
+			g.quadraticCurveTo(avg(x, f[0]), avg(y, f[1]) - 100, x, y);
+			g.stroke();
+			
+			g.setLineDash([]);
+			
+			if (cM.ep[mH])
+				x = f[0] - 7,
+				a = f[0] + 7,
+				y = f[1] - 3,
+				b = f[1] + 3,
+				line(g, x, y, a, b),
+				line(g, x, b, a, y);
+		}
 	});
 
 maps = {
