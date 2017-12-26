@@ -1,6 +1,8 @@
 // CONSTANTS
 SCREEN_WIDTH = 225;
 SCREEN_HEIGHT = 152;
+SCREEN_HALF_WIDTH = 112.5;
+SCREEN_HALF_HEIGHT = 76;
 
 MOUSE_NONE = 0;
 MOUSE_VIEW_DRAG = 1;
@@ -167,12 +169,11 @@ loadMap = (m) => {
 			r.dl = r.i.dl.bind(0, r),
 			c.ep[y.p] = r,
 			c.e.push(r);
-	sortEnt(c.e);
+	c.e.d = 1;
 	return c;
 };
 
 compHexY = (a, b) => a[1] + a[0]/2 - b[1] - b[0]/2;
-sortEnt = (e) => e.sort(compHexY);
 moveEnt = (m, e, x, y) => {
 	delete m.ep[e.p];
 	e.p = [x, y];
@@ -189,6 +190,9 @@ drawSelect = (s) =>
 	drawSprite(g, "highlight", ...hexToCan(...s.p,
 		vp.x + TILE_HALF_WIDTH, vp.y + TILE_HALF_HEIGHT));
 drawEnt = (e, i) => {
+	if(e.d)
+		e.sort(compHexY),
+		e.d = 0;
 	sE && sE.de();
 	for (i of e) i.d();
 	sE && sE.dl();
@@ -255,12 +259,12 @@ createImageBitmap(new Blob([sa],{type: png})).then(s=>{
 	g.imageSmoothingEnabled = 0;
 	g.font = "7px consolas";
 	
-	drawSprite(g, "logo", 0, 0, 2);
+	drawSprite(g, "logo", SCREEN_HALF_WIDTH, SCREEN_HALF_HEIGHT, 2);
 	
 	setTimeout(() => {
 		oldT = performance.now();
 		requestAnimationFrame(render);
-	}, 1e3);
+	}, 2e3);
 });
 
 /* Mouse state:
@@ -284,7 +288,7 @@ c.onmousedown = (e, t) => {
 	if (sE && e.button == 2 && !cM.ep[mH])
 		moveEnt(cM, sE, ...mH),
 		sE = 0,
-		sortEnt(cM.e);
+		cM.e.d = 1;
 };
 onmousemove = (e, h) => {
 	mP = [e.pageX, e.pageY];
