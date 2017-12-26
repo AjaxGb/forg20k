@@ -21,6 +21,7 @@ cEl = doc.createElement.bind(doc);
 
 for (n of ["min","max","round","abs"]) window[n] = Math[n];
 clamp = (x, a, b) => min(max(x, a), b);
+avg = (a, b) => (a + b) / 2;
 
 makeCanvas = (w, h, c) => (
 	c = cEl("canvas"),
@@ -28,13 +29,26 @@ makeCanvas = (w, h, c) => (
 	c.height = h,
 	c.getContext("2d"));
 
+bStr = (g, c, w, x, y) => {
+	g.strokeStyle = c;
+	g.lineWidth = w;
+	g.beginPath();
+	g.moveTo(x, y);
+};
+line = (g, a, b, c, d) => {
+	g.beginPath();
+	g.moveTo(a, b);
+	g.lineTo(c, d);
+	g.stroke();
+};
+
 sa = new Uint8Array(s.length*7/8);
-for (i = j = 0; i < s.length; ++i, ++j) {
-	let c = s.charCodeAt(i) % 65533, r = i % 8;
-	sa[j-1] |= c >> 7 - r;
-	sa[j]    = c << r + 1;
+for (i = j = 0; i < s.length; ++i, ++j)
+	h = s.charCodeAt(i) % 65533,
+	r = i % 8,
+	sa[j-1] |= h >> 7 - r,
+	sa[j]    = h << r + 1,
 	r == 7 && --j;
-}
 
 tiles = [
 	{
@@ -48,8 +62,35 @@ tiles = [
 ent = {
 	forgB: {}
 };
-for (let n in ent)
-	ent[n].s = ent[n].s || n;
+for (n in ent)
+	e = ent[n],
+	e.h = e.h || 7,
+	e.s = e.s || n,
+	e.d = e.d || ((e) =>
+		drawSprite(g, e.i.s, ...hexToCan(...e.p, vp.x, vp.y))),
+	e.de = e.de || ((e) => drawSelect(e)),
+	e.dl = e.dl || ((e, x,y,f,c,d) => {
+		[x, y] = hexToCan(...e.p, vp.x, vp.y);
+		y -= e.i.h;
+		f = hexToCan(...mH, vp.x, vp.y);
+		
+		bStr(g, "red", 2, ...f);
+		g.setLineDash([15, 5]);
+		g.lineDashOffset = t / 50;
+		
+		g.quadraticCurveTo(avg(x, f[0]), avg(y, f[1]) - 100, x, y);
+		g.stroke();
+		
+		g.setLineDash([]);
+		
+		if (cM.ep[mH])
+			x = f[0] - 7,
+			a = f[0] + 7,
+			y = f[1] - 3,
+			b = f[1] + 3,
+			line(g, x, y, a, b),
+			line(g, x, b, a, y);
+	});
 
 maps = {
 	test: {
@@ -100,7 +141,8 @@ loadMap = (m) => {
 			-TILE_HALF_HEIGHT + ay * TILE_HEIGHT,
 			m.w * TILE_SPREAD - TILE_CAP_WIDTH,
 			m.h * TILE_HEIGHT),
-		ep: {}, e: []
+		ep: {},
+		e: []
 	}, x, y, r, z;
 	for (y = 0; y < m.h + 2 * ay; ++y) {
 		c.t[y] = [2 * max(ay - y, 0)];
@@ -120,12 +162,22 @@ loadMap = (m) => {
 				i: ent[x],
 				p: y.p
 			},
-			c.ep[strP(...y.p)] = r,
+			r.d = r.i.d.bind(0, r),
+			r.de = r.i.de.bind(0, r),
+			r.dl = r.i.dl.bind(0, r),
+			c.ep[y.p] = r,
 			c.e.push(r);
+	sortEnt(c.e);
 	return c;
 };
 
+compHexY = (a, b) => a[1] + a[0]/2 - b[1] - b[0]/2;
 sortEnt = (e) => e.sort(compHexY);
+moveEnt = (m, e, x, y) => {
+	delete m.ep[e.p];
+	e.p = [x, y];
+	m.ep[e.p] = e;
+};
 
 drawTiles = (t, x,y) => {
 	for (y = t.length - 1; y >= 0; --y)
@@ -133,27 +185,18 @@ drawTiles = (t, x,y) => {
 			drawSprite(g, t[y][x].s, ...hexToCan(x + t[y][0] - 1, y,
 				vp.x + TILE_HALF_WIDTH, vp.y + TILE_HALF_HEIGHT));
 };
-drawSelect = (s) => {
+drawSelect = (s) =>
 	drawSprite(g, "highlight", ...hexToCan(...s.p,
 		vp.x + TILE_HALF_WIDTH, vp.y + TILE_HALF_HEIGHT));
-};
 drawEnt = (e, i) => {
-	sortEnt(e); // TODO! Move elsewhere
-	for (i of e)
-		drawSprite(g, i.i.s, ...hexToCan(...i.p, vp.x, vp.y));
+	sE && sE.de();
+	for (i of e) i.d();
+	sE && sE.dl();
 };
 drawMap = (m) => {
 	clear();
 	drawTiles(m.t);
-	sE && (
-		drawSelect(sE),
-		g.strokeStyle = "red",
-		g.beginPath(),
-		g.moveTo(...hexToCan(...sE.p, vp.x, vp.y)),
-		g.lineTo(...scrToCan(...mP)),
-		g.stroke());
 	drawEnt(m.e);
-	d = 0;
 };
 
 clampVP = (v, b) => {
@@ -161,15 +204,14 @@ clampVP = (v, b) => {
 	v.y = clamp(v.y, b.y, b.height - v.height);
 };
 
-currMap = loadMap(maps.test);
-clampVP(vp, currMap.camb);
+cM = loadMap(maps.test);
+clampVP(vp, cM.camb);
 
 // VECTOR CONVERSIONS
 scrToCan = (x, y, r) => (
 	r = c.getBoundingClientRect(),
 	[(x - r.x) / 4, (y - r.y) / 4]);
 eToCan = (e) => scrToCan(e.pageX, e.pageY);
-compHexY = (a, b) => a[1] + a[0]/2 - b[1] - b[0]/2;
 hexToCan = (x, y, ox, oy) => [TILE_SPREAD * x - ox |0, TILE_HEIGHT * (y + x/2) - oy |0];
 canToHex = (x, y, ox, oy, t) => (t = (x + ox) / TILE_SPREAD, [t, (y + oy) / TILE_HEIGHT - t/2]);
 eToHex = (e, ox, oy) => canToHex(...eToCan(e), ox, oy);
@@ -185,6 +227,13 @@ roundHex = (x, y, z,rx,ry,rz,dx,dy,dz) => (
 			: [rx, ry]
 );
 
+render = (s) => {
+	t = s;
+	dt = t - oldT;
+	drawMap(cM);
+	oldT = t;
+	requestAnimationFrame(render);
+};
 createImageBitmap(new Blob([sa],{type: png})).then(s=>{
 	drawSprite = (g,n,x,y,c,b,o) => (
 		b = sb[n].b,
@@ -208,7 +257,10 @@ createImageBitmap(new Blob([sa],{type: png})).then(s=>{
 	
 	drawSprite(g, "logo", 0, 0, 2);
 	
-	drawMap(currMap)
+	setTimeout(() => {
+		oldT = performance.now();
+		requestAnimationFrame(render);
+	}, 1e3);
 });
 
 /* Mouse state:
@@ -219,7 +271,7 @@ mSt = 0;
 
 c.onmousedown = (e, t) => {
 	if (mSt == MOUSE_NONE && e.button == 0) {
-		if (t = currMap.ep[strP(...roundHex(...eToHex(e, vp.x, vp.y)))])
+		if (t = cM.ep[roundHex(...eToHex(e, vp.x, vp.y))])
 			sE = (sE == t) ? 0 : t;
 		else
 			mSt = MOUSE_VIEW_DRAG,
@@ -227,28 +279,26 @@ c.onmousedown = (e, t) => {
 			drStMY = e.pageY,
 			drStCX = vp.x,
 			drStCY = vp.y;
-		d = 1;
 	}
 	
-	d && drawMap(currMap);
+	if (sE && e.button == 2 && !cM.ep[mH])
+		moveEnt(cM, sE, ...mH),
+		sE = 0,
+		sortEnt(cM.e);
 };
 onmousemove = (e, h) => {
 	mP = [e.pageX, e.pageY];
+	mH = roundHex(...eToHex(e, vp.x, vp.y));
 	
 	switch (mSt) {
 	case MOUSE_VIEW_DRAG:
 		vp.x = drStCX + (drStMX - e.pageX)/4 |0;
 		vp.y = drStCY + (drStMY - e.pageY)/4 |0;
-		clampVP(vp, currMap.camb);
-		d = 1;
+		clampVP(vp, cM.camb);
 		break;
 	}
 	
-	if (sE) d = 1;
-	
-	p.innerHTML = roundHex(...eToHex(e, vp.x, vp.y))
-		+ "<br>" + mP;
-	d && drawMap(currMap);
+	p.innerHTML = mH + "<br>" + mP;
 };
 onmouseup = (e) => {
 	switch (mSt) {
