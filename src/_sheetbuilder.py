@@ -3,12 +3,11 @@ import sys
 import json
 import re
 from PIL import Image
-from rectpack import newPacker
+import rpack
 import numpy as np
 
 sprites_path = sys.argv[1]
 gen_imagename, gen_metaname = sys.argv[2], sys.argv[3]
-gen_dimensions = (int(sys.argv[4]), int(sys.argv[4]))
 
 class SubSprite:
 	def __init__(self, bounds, origin=(0, 0)):
@@ -29,9 +28,9 @@ class Sprite:
 		self.subsprites[name] = SubSprite(
 			(0, 0, self.width, self.height), origin)
 	
-	def __str__(self):
-		return "<Sprite '{}' file={} sub={}>".format(
-			self.name, self.imagefile.filename, self.subsprites)
+	def __repr__(self):
+		return "<Sprite '{}' file={} w={} h={}>".format(
+			self.name, self.imagefile.filename, self.width, self.height)
 
 print("Compiling sprites in", sprites_path)
 print()
@@ -40,7 +39,7 @@ print()
 ## LOAD ALL IMAGES, META FILES ##
 #################################
 
-all_images = set()
+all_images = []
 
 for path, dirs, files in os.walk(sprites_path):
 	dir_images = {}
@@ -72,7 +71,7 @@ for path, dirs, files in os.walk(sprites_path):
 			subsprites = {}
 			origin = (0, 0)
 		
-		all_images.add(
+		all_images.append(
 			Sprite(spritename, image, origin=origin, subsprites=subsprites))
 
 print("Found", len(all_images), "image files.")
@@ -88,11 +87,11 @@ palette = {}
 
 for sprite in all_images:
 	for count, color in sprite.imagefile.getcolors():
-		if color == transparent_color:
+		if color[3] == 0:
 			transparent_count += count
 		else:
 			if color[3] != 255:
-				print("WARN! Sprite", sprite, "contains non-standard transparency!")
+				print("WARN! Sprite", sprite, "contains partial transparency!")
 			color = (*color[:3],)
 			palette[color] = palette.get(color, 0) + count
 		total_pixels += count
@@ -123,19 +122,26 @@ print()
 ## PACK SPRITES INTO SHEET ##
 #############################
 
-packer = newPacker()
+# For best result, sort the sprites by height, highest first
+all_images.sort(key=lambda s: s.height, reverse=True)
 
-for s in all_images:
-	packer.add_rect(s.width, s.height, s)
-packer.add_bin(*gen_dimensions)
-packer.pack()
+positions = rpack.pack([(s.width, s.height) for s in all_images])
 
-sheet = Image.new("P", gen_dimensions)
+width, height = 0, 0
+for i, (x, y) in enumerate(positions):
+	sprite = all_images[i]
+	
+	width = max(width, x + sprite.width)
+	height = max(height, y + sprite.height)
+
+print("Sheet size:", width, "x", height)
+
+sheet = Image.new("P", (width, height))
 sheet.putpalette(palette_list)
 		
 all_subsprites = {}
-for _, x, y, w, h, sprite in packer.rect_list():
-	all_images.remove(sprite)
+for i, (x, y) in enumerate(positions):
+	sprite = all_images[i]
 	
 	# Palettise	
 	sprite_arr = np.array(sprite.imagefile, dtype=np.uint8)
@@ -148,13 +154,9 @@ for _, x, y, w, h, sprite in packer.rect_list():
 	for spritename, subsprite in sprite.subsprites.items():
 		all_subsprites[spritename] = subsprite.offset(x, y)
 
-if len(all_images):
-	print("ERR!", len(all_images), "sprites could not be fit:")
-	for i in all_images:
-		print(i)
-	sys.exit(1)
-
 sheet.save(gen_imagename, optimize=True, transparency=0)
+
+print("Sheet saved")
 
 ##########################
 ## WRITE JS WITH BOUNDS ##
@@ -169,3 +171,5 @@ with open(gen_metaname, "w") as metafile:
 		+ "]}"
 		for name, subsprite in all_subsprites.items()
 	]), "};", file=metafile, sep="", end="")
+
+print("Meta file saved")

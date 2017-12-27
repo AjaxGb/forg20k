@@ -2,7 +2,7 @@
 mkdir gen 2> nul
 
 echo **GENERATING SPRITE SHEET
-python _sheetbuilder.py sprites gen/sprites.png gen/sprites_meta.js 256 256
+python _sheetbuilder.py sprites gen/sprites.png gen/sprites_meta.js
 echo **CONVERTING SPRITE SHEET TO TEXT
 python _binary_to_string.py gen/sprites.png gen/sprites_ascii.js s
 echo **BUILDING HTML FILE
