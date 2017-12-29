@@ -154,15 +154,33 @@ for (i = j = 0; i < s.length; ++i, ++j)
 
 tiles = [
 	{
-		s: "grass"
+		s: "grass",
+		p: 1
 	},
 	{
-		s: "dirt"
+		s: "dirt",
+		p: 1
 	}
 ];
 
 ent = {
-	forgB: {p: 1},
+	forgB: {
+		p: 1,
+		m: e => {
+			let i, o, t, s = {};
+			for (i of e.p.iRing(3)) {
+				for (i of Hex.line(e.p, i)) {
+					if (i.eq(e.p) || !(t = getT(cM.t, i)) || !t.p)
+						continue;
+					if (o = cM.ep[i])
+						if (o.i.t) break;
+						else continue;
+					s[i] = i;
+				}
+			}
+			return s;
+		}
+	},
 	tree: {t: 1}
 };
 for (n in ent)
@@ -172,41 +190,28 @@ for (n in ent)
 	e.d = e.d || (e =>
 		drawSprite(g, e.i.s, ...hexToCan(e.p, vp.x, vp.y))),
 	e.de = e.de || (e => {
-		let r, i, o;
 		drawSelect(e.p);
-		for (r of e.p.iRing(3)) {
-			for (i of Hex.line(e.p, r)) {
-				if (i.eq(e.p)) continue;
-				if (o = cM.ep[i])
-					if (o.i.t) break;
-					else continue;
-				drawSelect(i)
-			}
-		}
+		for (let p in sT) drawSelect(sT[p]);
 	}),
 	e.dl = e.dl || ((e, x,y,f,c,d) => {
-		if (!mH.eq(e.p)) {
-			[x, y] = hexToCan(e.p, vp.x, vp.y);
-			y -= e.i.h;
-			f = hexToCan(mH, vp.x, vp.y);
-			
-			bStr(g, "red", 2, ...f);
-			g.setLineDash([15, 5]);
-			g.lineDashOffset = t / 50;
-			
-			g.quadraticCurveTo(avg(x, f[0]), avg(y, f[1]) - 100, x, y);
-			g.stroke();
-			
+		[x, y] = hexToCan(e.p, vp.x, vp.y);
+		y -= e.i.h;
+		f = hexToCan(mH, vp.x, vp.y);
+		bStr(g, "red", 2, ...f);
+		
+		if (sT[mH])
+			g.setLineDash([15, 5]),
+			g.lineDashOffset = t / 50,
+			g.quadraticCurveTo(avg(x, f[0]), avg(y, f[1]) - 100, x, y),
+			g.stroke(),
 			g.setLineDash([]);
-			
-			if (cM.ep[mH])
-				x = f[0] - 7,
-				a = f[0] + 7,
-				y = f[1] - 3,
-				b = f[1] + 3,
-				line(g, x, y, a, b),
-				line(g, x, b, a, y)
-		}
+		else if (!mH.eq(e.p))
+			x = f[0] - 7,
+			a = f[0] + 7,
+			y = f[1] - 3,
+			b = f[1] + 3,
+			line(g, x, y, a, b),
+			line(g, x, b, a, y)
 	});
 
 maps = {
@@ -230,13 +235,14 @@ maps = {
 	}
 };
 
-getT = (m,x,y,r) => r = (m[y], r[x - r[0] + 1]);
-setT = (m,x,y,t,r) => r = (m[y], r[x - r[0] + 1] = t);
+getT = (m, {x, y}, r) => (r = m[y], r[x - r[0] + 1]);
+setT = (m, {x, y}, t, r) => (r = m[y], r[x - r[0] + 1] = t);
 
 strP = (x, y) => x + "," + y;
 
 vp = new DOMRect(-9e9, -9e9, c.width, c.height);
 sE = 0;
+selE = e => (sE = e) && e.m && (sT = e.m());
 d = 0;
 loadMap = m => {
 	let ay = (m.w - 1)/2 |0,
@@ -273,6 +279,7 @@ loadMap = m => {
 			r.d = r.i.d.bind(0, r),
 			r.de = r.i.de.bind(0, r),
 			r.dl = r.i.dl.bind(0, r),
+			r.i.m && (r.m = r.i.m.bind(0, r)),
 			c.ep[y.p] = r,
 			c.e.push(r);
 	c.e.d = 1;
@@ -337,8 +344,9 @@ createImageBitmap(new Blob([sa], {type: png})).then(s => {
 	s = makeCanvas(s.width, s.height, (g, n) => {
 		g.drawImage(s, 0, 0);
 		g.globalCompositeOperation = "destination-out";
-		for (n of ["tree"])
-			n = sb[n].b,
+		for (n in ent)
+			if (ent[n].t) continue;
+			n = sb[ent[n].s].b,
 			g.fillStyle = makeDGrad(g, n[1], n[3]),
 			g.fillRect(...n);
 	});
@@ -378,7 +386,7 @@ mSt = 0;
 c.onmousedown = (e, t) => {
 	if (mSt == MOUSE_NONE && e.button == 0) {
 		if ((t = cM.ep[eToHex(e, vp.x, vp.y).round()]) && t.i.p)
-			sE = (sE == t) ? 0 : t;
+			selE((sE == t) ? 0 : t);
 		else
 			mSt = MOUSE_VIEW_DRAG,
 			drStMX = e.pageX,
@@ -387,9 +395,9 @@ c.onmousedown = (e, t) => {
 			drStCY = vp.y;
 	}
 	
-	if (sE && e.button == 2 && !cM.ep[mH])
+	if (sE && e.button == 2 && sT[mH])
 		moveEnt(cM, sE, mH),
-		sE = 0,
+		selE(0),
 		cM.e.d = 1;
 };
 onmousemove = (e, h) => {
