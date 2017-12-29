@@ -24,6 +24,106 @@ cEl = doc.createElement.bind(doc);
 for (n of ["min","max","round","abs"]) window[n] = Math[n];
 clamp = (x, a, b) => min(max(x, a), b);
 avg = (a, b) => (a + b) / 2;
+lerp = (a, b, t) => a + (b - a) * t;
+
+H = (x, y) => new Hex(x, y);
+class Hex {
+	constructor(x, y) {
+		this.x = x;
+		this.y = y;
+	}
+	get z() {
+		return -this.x - this.y
+	}
+	get [0]() {
+		throw 1;
+		return this.x
+	}
+	get [1]() {
+		throw 2;
+		return this.y
+	}
+	get [2]() {
+		throw 3;
+		return this.z;
+	}
+	map(f) {
+		return H(f(this.x), f(this.y))
+	}
+	map2(f, b) {
+		return H(f(this.x, b.x), f(this.y, b.y))
+	}
+	eq(b) {
+		return this.x == b.x && this.y == b.y
+	}
+	addc(x, y) {
+		return H(this.x + x, this.y + y)
+	}
+	add(b) {
+		return this.addc(b.x, b.y)
+	}
+	sub(b) {
+		return this.addc(-b.x, -b.y)
+	}
+	scalei(x, y) {
+		return H(this.x * x, this.y * y)
+	}
+	scale(s) {
+		return this.scalei(s, s)
+	}
+	gmag() {
+		return (abs(this.x) + abs(this.y) + abs(this.z)) / 2
+	}
+	adj(d) {
+		return Hex.dirs[d].add(this)
+	}
+	*aAdj() {
+		yield* Hex.dirs.map(d => this.add(d))
+	}
+	*aRad(r, x,y) {
+		for (x = -r; x <= r; ++x)
+			for (y = max(-r, -x-r); y <= min(r, -x+r); ++y)
+				yield this.addc(x, y)
+	}
+	*aRing(r, c,d,i) {
+		c = this.add(Hex.dirs[4].scale(r));
+		for (d = 0; d < 6; ++d)
+			for (i = r; i--;)
+				yield c, c = c.adj(d)
+	}
+	round() {
+		let rx = round(this.x),
+		    ry = round(this.y),
+		    rz = round(this.z),
+		    dx = abs(rx - this.x),
+		    dy = abs(ry - this.y),
+		    dz = abs(rz - this.z);
+		return dx > dy && dx > dz
+			? H(-ry-rz, ry)
+			: dy > dz
+				? H(rx, -rx-rz)
+				: H(rx, ry)
+	}
+	static gdist(a, b) {
+		return a.sub(b).gmag()
+	}
+	static lerp(a, b, t) {
+		return H(lerp(a.x, b.x, t), lerp(a.y, b.y, t))
+	}
+	static *line(a, b, d,i) {
+		d = Hex.gdist(a, b);
+		i = d + 1;
+		while (i--)
+			yield Hex.lerp(b, a, i/d).round()
+	}
+	toString() {
+		return this.x + "," + this.y
+	}
+}
+Hex.dirs = [
+	H( 1,-1), H( 1,0), H(0, 1),
+	H(-1, 1), H(-1,0), H(0,-1)
+];
 
 makeCanvas = (w, h, c) => (
 	c = cEl("canvas"),
@@ -68,14 +168,23 @@ for (n in ent)
 	e = ent[n],
 	e.h = e.h || 7,
 	e.s = e.s || n,
-	e.d = e.d || ((e) =>
-		drawSprite(g, e.i.s, ...hexToCan(...e.p, vp.x, vp.y))),
-	e.de = e.de || ((e) => drawSelect(e)),
+	e.d = e.d || (e =>
+		drawSprite(g, e.i.s, ...hexToCan(e.p, vp.x, vp.y))),
+	e.de = e.de || (e => {
+		drawSelect(e.p);
+		for (let r of e.p.aRing(3)) {
+			for (let i of Hex.line(e.p, r)) {
+				if (i.eq(e.p)) continue;
+				if (cM.ep[i]) break;
+				drawSelect(i)
+			}
+		}
+	}),
 	e.dl = e.dl || ((e, x,y,f,c,d) => {
-		if (e.p[0] != mH[0] || e.p[1] != mH[1]) {
-			[x, y] = hexToCan(...e.p, vp.x, vp.y);
+		if (!mH.eq(e.p)) {
+			[x, y] = hexToCan(e.p, vp.x, vp.y);
 			y -= e.i.h;
-			f = hexToCan(...mH, vp.x, vp.y);
+			f = hexToCan(mH, vp.x, vp.y);
 			
 			bStr(g, "red", 2, ...f);
 			g.setLineDash([15, 5]);
@@ -92,7 +201,7 @@ for (n in ent)
 				y = f[1] - 3,
 				b = f[1] + 3,
 				line(g, x, y, a, b),
-				line(g, x, b, a, y);
+				line(g, x, b, a, y)
 		}
 	});
 
@@ -134,7 +243,7 @@ strP = (x, y) => x + "," + y;
 vp = new DOMRect(-9e9, -9e9, SCREEN_WIDTH, SCREEN_HEIGHT);
 sE = 0;
 d = 0;
-loadMap = (m) => {
+loadMap = m => {
 	let ay = (m.w - 1)/2 |0,
 	c = {
 		f: m,
@@ -164,7 +273,7 @@ loadMap = (m) => {
 		for (y of m.e[x])
 			r = {
 				i: ent[x],
-				p: y.p
+				p: H(...y.p)
 			},
 			r.d = r.i.d.bind(0, r),
 			r.de = r.i.de.bind(0, r),
@@ -175,21 +284,21 @@ loadMap = (m) => {
 	return c;
 };
 
-compHexY = (a, b) => a[1] + a[0]/2 - b[1] - b[0]/2;
-moveEnt = (m, e, x, y) => {
+compHexY = (a, b) => a.y + a.x/2 - b.y - b.x/2;
+moveEnt = (m, e, {x, y}) => {
 	delete m.ep[e.p];
-	e.p = [x, y];
+	e.p = H(x, y);
 	m.ep[e.p] = e;
 };
 
 drawTiles = (t, x,y) => {
 	for (y = t.length - 1; y >= 0; --y)
 		for (x = t[y].length - 1; x > 0; --x)
-			drawSprite(g, t[y][x].s, ...hexToCan(x + t[y][0] - 1, y,
+			drawSprite(g, t[y][x].s, ...hexToCan(H(x + t[y][0] - 1, y),
 				vp.x + TILE_HALF_WIDTH, vp.y + TILE_HALF_HEIGHT));
 };
-drawSelect = (s) =>
-	drawSprite(g, "highlight", ...hexToCan(...s.p,
+drawSelect = p =>
+	drawSprite(g, "highlight", ...hexToCan(p,
 		vp.x + TILE_HALF_WIDTH, vp.y + TILE_HALF_HEIGHT));
 drawEnt = (e, i) => {
 	if(e.d)
@@ -199,7 +308,7 @@ drawEnt = (e, i) => {
 	for (i of e) i.d();
 	sE && sE.dl();
 };
-drawMap = (m) => {
+drawMap = m => {
 	clear();
 	drawTiles(m.t);
 	drawEnt(m.e);
@@ -217,30 +326,19 @@ clampVP(vp, cM.camb);
 scrToCan = (x, y, r) => (
 	r = c.getBoundingClientRect(),
 	[(x - r.x) / 4, (y - r.y) / 4]);
-eToCan = (e) => scrToCan(e.pageX, e.pageY);
-hexToCan = (x, y, ox, oy) => [TILE_SPREAD * x - ox |0, TILE_HEIGHT * (y + x/2) - oy |0];
-canToHex = (x, y, ox, oy, t) => (t = (x + ox) / TILE_SPREAD, [t, (y + oy) / TILE_HEIGHT - t/2]);
+eToCan = e => scrToCan(e.pageX, e.pageY);
+hexToCan = ({x, y}, ox, oy) => [TILE_SPREAD * x - ox |0, TILE_HEIGHT * (y + x/2) - oy |0];
+canToHex = (x, y, ox, oy, t) => (t = (x + ox) / TILE_SPREAD, H(t, (y + oy) / TILE_HEIGHT - t/2));
 eToHex = (e, ox, oy) => canToHex(...eToCan(e), ox, oy);
-offVec = (v, ox, oy) => [v[0] + ox, v[1] + oy];
-roundHex = (x, y, z,rx,ry,rz,dx,dy,dz) => (
-	z = -x-y,
-	rx = round(x), ry = round(y), rz = round(z),
-	dx = abs(rx-x), dy = abs(ry-y), dz = abs(rz-z),
-	dx > dy && dx > dz
-		? [-ry-rz, ry]
-		: dy > dz
-			? [rx, -rx-rz]
-			: [rx, ry]
-);
 
-render = (s) => {
+render = s => {
 	t = s;
 	dt = t - oldT;
 	drawMap(cM);
 	oldT = t;
 	requestAnimationFrame(render);
 };
-createImageBitmap(new Blob([sa],{type: png})).then(s=>{
+createImageBitmap(new Blob([sa], {type: png})).then(s => {
 	drawSprite = (g,n,x,y,c,b,o) => (
 		b = sb[n].b,
 		o = sb[n].o || [0,0],
@@ -277,7 +375,7 @@ mSt = 0;
 
 c.onmousedown = (e, t) => {
 	if (mSt == MOUSE_NONE && e.button == 0) {
-		if (t = cM.ep[roundHex(...eToHex(e, vp.x, vp.y))])
+		if (t = cM.ep[eToHex(e, vp.x, vp.y).round()])
 			sE = (sE == t) ? 0 : t;
 		else
 			mSt = MOUSE_VIEW_DRAG,
@@ -288,13 +386,13 @@ c.onmousedown = (e, t) => {
 	}
 	
 	if (sE && e.button == 2 && !cM.ep[mH])
-		moveEnt(cM, sE, ...mH),
+		moveEnt(cM, sE, mH),
 		sE = 0,
 		cM.e.d = 1;
 };
 onmousemove = (e, h) => {
 	mP = [e.pageX, e.pageY];
-	mH = roundHex(...eToHex(e, vp.x, vp.y));
+	mH = eToHex(e, vp.x, vp.y).round();
 	
 	switch (mSt) {
 	case MOUSE_VIEW_DRAG:
@@ -306,11 +404,11 @@ onmousemove = (e, h) => {
 	
 	p.innerHTML = mH + "<br>" + mP;
 };
-onmouseup = (e) => {
+onmouseup = e => {
 	switch (mSt) {
 	case MOUSE_VIEW_DRAG:
 		if (e.button == 0) mSt = MOUSE_NONE;
 		break;
 	}
 };
-c.oncontextmenu = (e) => !1;
+c.oncontextmenu = e => !1;
