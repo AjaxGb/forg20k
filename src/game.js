@@ -193,23 +193,27 @@ for (n in ent)
 		drawSelect(e.p);
 		for (let p in sT) drawSelect(sT[p]);
 	}),
-	e.dl = e.dl || ((e, x,y,f,c,d) => {
+	e.dl = e.dl || ((e, x,y,f,a,b) => {
 		[x, y] = hexToCan(e.p, vp.x, vp.y);
 		y -= e.i.h;
-		f = hexToCan(mH, vp.x, vp.y);
+		[a, b] = f = hexToCan(mH, vp.x, vp.y);
 		bStr(g, "red", 2, ...f);
 		
 		if (sT[mH])
 			g.setLineDash([15, 5]),
 			g.lineDashOffset = t / 50,
-			g.quadraticCurveTo(avg(x, f[0]), avg(y, f[1]) - 100, x, y),
+			g.quadraticCurveTo(avg(x, a), avg(y, b) - 100, x, y),
 			g.stroke(),
-			g.setLineDash([]);
+			g.setLineDash([]),
+			g.beginPath(),
+			g.ellipse(a-.5, b-.5, 4, 2, 0, 0, 7),
+			g.fillStyle = "red",
+			g.fill();
 		else if (!mH.eq(e.p))
-			x = f[0] - 7,
-			a = f[0] + 7,
-			y = f[1] - 3,
-			b = f[1] + 3,
+			x = a - 7,
+			a = a + 7,
+			y = b - 3,
+			b = b + 3,
 			line(g, x, y, a, b),
 			line(g, x, b, a, y)
 	});
