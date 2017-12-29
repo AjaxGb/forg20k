@@ -1,9 +1,4 @@
 // CONSTANTS
-SCREEN_WIDTH = 225;
-SCREEN_HEIGHT = 152;
-SCREEN_HALF_WIDTH = 112.5;
-SCREEN_HALF_HEIGHT = 76;
-
 MOUSE_NONE = 0;
 MOUSE_VIEW_DRAG = 1;
 
@@ -12,17 +7,16 @@ TILE_HALF_HEIGHT = 8;
 TILE_HALF_HEIGHT_P1 = TILE_HALF_HEIGHT + 1;
 TILE_SPREAD = 24;
 TILE_CAP_WIDTH = 8;
+TILE_CAP_WIDTH_P1 = 9;
 TILE_WIDTH = 32;
 TILE_HALF_WIDTH = 16;
-
-SCREEN_WIDTH_PCAP = SCREEN_WIDTH + TILE_CAP_WIDTH;
 
 png = "image/png";
 doc = document;
 cEl = doc.createElement.bind(doc);
 
 for (n of ["min","max","round","abs"]) window[n] = Math[n];
-clamp = (x, a, b) => min(max(x, a), b);
+clamp = (x, a, b) => max(min(x, b), a);
 avg = (a, b) => (a + b) / 2;
 lerp = (a, b, t) => a + (b - a) * t;
 
@@ -240,7 +234,7 @@ strP = (x, y) => x + "," + y;
  * |    X
  */
 
-vp = new DOMRect(-9e9, -9e9, SCREEN_WIDTH, SCREEN_HEIGHT);
+vp = new DOMRect(-9e9, -9e9, c.width, c.height);
 sE = 0;
 d = 0;
 loadMap = m => {
@@ -252,7 +246,7 @@ loadMap = m => {
 		camb: new DOMRect(
 			-TILE_HALF_WIDTH,
 			-TILE_HALF_HEIGHT + ay * TILE_HEIGHT,
-			m.w * TILE_SPREAD - TILE_CAP_WIDTH,
+			m.w * TILE_SPREAD - TILE_CAP_WIDTH_P1,
 			m.h * TILE_HEIGHT),
 		ep: {},
 		e: []
@@ -299,7 +293,7 @@ drawTiles = (t, x,y) => {
 };
 drawSelect = p =>
 	drawSprite(g, "highlight", ...hexToCan(p,
-		vp.x + TILE_HALF_WIDTH, vp.y + TILE_HALF_HEIGHT));
+		vp.x, vp.y));
 drawEnt = (e, i) => {
 	if(e.d)
 		e.sort(compHexY),
@@ -348,18 +342,17 @@ createImageBitmap(new Blob([sa], {type: png})).then(s => {
 			y - o[1] * c |0,
 			b[2] * c, b[3] * c),
 		g);
-	clear = () => g.clearRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+	clear = _=> g.clearRect(0, 0, c.width, c.height);
 	
 	// Draw favicon
 	g = drawSprite(c.getContext('2d'), "favicon");
 	ic.href = c.toDataURL();
 	
-	c.width = SCREEN_WIDTH;
-	c.height = SCREEN_HEIGHT;
+	onresize();
 	g.imageSmoothingEnabled = 0;
 	g.font = "7px consolas";
 	
-	drawSprite(g, "logo", SCREEN_HALF_WIDTH, SCREEN_HALF_HEIGHT, 2);
+	drawSprite(g, "logo", c.width / 2, c.height / 2, 2);
 	
 	setTimeout(() => {
 		oldT = performance.now();
@@ -401,8 +394,6 @@ onmousemove = (e, h) => {
 		clampVP(vp, cM.camb);
 		break;
 	}
-	
-	p.innerHTML = mH + "<br>" + mP;
 };
 onmouseup = e => {
 	switch (mSt) {
@@ -412,3 +403,9 @@ onmouseup = e => {
 	}
 };
 c.oncontextmenu = e => !1;
+onresize = e => (
+	vp.width  = c.width  = innerWidth  / 4 |0,
+	vp.height = c.height = innerHeight / 4 |0,
+	c.style.width = c.width * 4,
+	c.style.height = c.height * 4,
+	clampVP(vp, cM.camb))
