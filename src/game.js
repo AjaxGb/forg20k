@@ -71,15 +71,15 @@ class Hex {
 	adj(d) {
 		return Hex.dirs[d].add(this)
 	}
-	*aAdj() {
+	*iAdj() {
 		yield* Hex.dirs.map(d => this.add(d))
 	}
-	*aRad(r, x,y) {
+	*iRad(r, x,y) {
 		for (x = -r; x <= r; ++x)
 			for (y = max(-r, -x-r); y <= min(r, -x+r); ++y)
 				yield this.addc(x, y)
 	}
-	*aRing(r, c,d,i) {
+	*iRing(r, c,d,i) {
 		c = this.add(Hex.dirs[4].scale(r));
 		for (d = 0; d < 6; ++d)
 			for (i = r; i--;)
@@ -119,11 +119,17 @@ Hex.dirs = [
 	H(-1, 1), H(-1,0), H(0,-1)
 ];
 
-makeCanvas = (w, h, c) => (
+makeCanvas = (w, h, d, c) => (
 	c = cEl("canvas"),
 	c.width = w,
 	c.height = h,
-	c.getContext("2d"));
+	d(c.getContext("2d"), c),
+	c);
+makeDGrad = (g, y, h) => (
+	g = g.createLinearGradient(0, y, 0, y + h),
+	g.addColorStop(0, "rgba(0,0,0,1)"),
+	g.addColorStop(1, "rgba(0,0,0,0)"),
+	g);
 
 bStr = (g, c, w, x, y) => {
 	g.strokeStyle = c;
@@ -156,7 +162,8 @@ tiles = [
 ];
 
 ent = {
-	forgB: {}
+	forgB: {p: 1},
+	tree: {t: 1}
 };
 for (n in ent)
 	e = ent[n],
@@ -165,11 +172,14 @@ for (n in ent)
 	e.d = e.d || (e =>
 		drawSprite(g, e.i.s, ...hexToCan(e.p, vp.x, vp.y))),
 	e.de = e.de || (e => {
+		let r, i, o;
 		drawSelect(e.p);
-		for (let r of e.p.aRing(3)) {
-			for (let i of Hex.line(e.p, r)) {
+		for (r of e.p.iRing(3)) {
+			for (i of Hex.line(e.p, r)) {
 				if (i.eq(e.p)) continue;
-				if (cM.ep[i]) break;
+				if (o = cM.ep[i])
+					if (o.i.t) break;
+					else continue;
 				drawSelect(i)
 			}
 		}
@@ -208,12 +218,13 @@ maps = {
 		],
 		e: {
 			forgB: [
-				{
-					p: [9, 9]
-				},
-				{
-					p: [8, 9]
-				}
+				{p: [ 9, 9]},
+				{p: [ 8, 9]}
+			],
+			tree: [
+				{p: [10,10]},
+				{p: [ 8,11]},
+				{p: [12,12]}
 			]
 		}
 	}
@@ -223,16 +234,6 @@ getT = (m,x,y,r) => r = (m[y], r[x - r[0] + 1]);
 setT = (m,x,y,t,r) => r = (m[y], r[x - r[0] + 1] = t);
 
 strP = (x, y) => x + "," + y;
-
-/*
- * Y
- * |   (Z)
- * |\  /
- * | \/
- * |  \
- * |   \
- * |    X
- */
 
 vp = new DOMRect(-9e9, -9e9, c.width, c.height);
 sE = 0;
@@ -278,7 +279,7 @@ loadMap = m => {
 	return c;
 };
 
-compHexY = (a, b) => a.y + a.x/2 - b.y - b.x/2;
+compHexY = (a, b) => a.p.y + a.p.x/2 - b.p.y - b.p.x/2;
 moveEnt = (m, e, {x, y}) => {
 	delete m.ep[e.p];
 	e.p = H(x, y);
@@ -325,14 +326,22 @@ hexToCan = ({x, y}, ox, oy) => [TILE_SPREAD * x - ox |0, TILE_HEIGHT * (y + x/2)
 canToHex = (x, y, ox, oy, t) => (t = (x + ox) / TILE_SPREAD, H(t, (y + oy) / TILE_HEIGHT - t/2));
 eToHex = (e, ox, oy) => canToHex(...eToCan(e), ox, oy);
 
-render = s => {
-	t = s;
+render = d => {
+	t = d;
 	dt = t - oldT;
 	drawMap(cM);
 	oldT = t;
 	requestAnimationFrame(render);
 };
 createImageBitmap(new Blob([sa], {type: png})).then(s => {
+	s = makeCanvas(s.width, s.height, (g, n) => {
+		g.drawImage(s, 0, 0);
+		g.globalCompositeOperation = "destination-out";
+		for (n of ["tree"])
+			n = sb[n].b,
+			g.fillStyle = makeDGrad(g, n[1], n[3]),
+			g.fillRect(...n);
+	});
 	drawSprite = (g,n,x,y,c,b,o) => (
 		b = sb[n].b,
 		o = sb[n].o || [0,0],
@@ -368,7 +377,7 @@ mSt = 0;
 
 c.onmousedown = (e, t) => {
 	if (mSt == MOUSE_NONE && e.button == 0) {
-		if (t = cM.ep[eToHex(e, vp.x, vp.y).round()])
+		if ((t = cM.ep[eToHex(e, vp.x, vp.y).round()]) && t.i.p)
 			sE = (sE == t) ? 0 : t;
 		else
 			mSt = MOUSE_VIEW_DRAG,
