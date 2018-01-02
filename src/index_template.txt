@@ -1,1 +1,1 @@
-<title>FORG</title><link rel=icon id=ic><style>*{margin:0;background:#000}#c{image-rendering:pixelated}</style><canvas id=c width=16 height=16></canvas><script>$$</script>
+<title>FORG</title><link rel=icon id=ic><style>*{margin:0;image-rendering:pixelated}body{display:flex;flex-direction:column;height:100%;background:#000}html{width:100%;height:100%}#f{background:#fa4}.b{width:64px;height:64px;padding:4px;margin:8px;background:#fd2}.s{background:#ff9}</style><canvas id=c width=16 height=16></canvas><p id=f><script>$$</script>

@@ -163,23 +163,72 @@ tiles = [
 	}
 ];
 
+expTargs = (r, f) => e => {
+	let i, t, a, b, s = {};
+	for (i of e.p.iRing(r)) {
+		for (i of Hex.line(e.p, i)) {
+			if (i.eq(e.p) || !(t = getT(cM.t, i)) || !t.p)
+				continue;
+			[a, b] = f(i, cM.ep[i]);
+			if (a) s[i] = i;
+			if (b) break
+		}
+	}
+	return s
+};
+moves = [
+	{
+		n: "Jump",
+		s: "jump",
+		l: expTargs(5, (i, e) => [!e, e && e.i.t]),
+		d: e => {
+			let [x, y] = hexToCan(e.p, vp.x, vp.y),
+			    [a, b] = hexToCan(mH, vp.x, vp.y);
+			y -= e.i.h;
+			bStr(g, "red", 2, a, b);
+			
+			if (sT[mH])
+				g.setLineDash([15, 5]),
+				g.lineDashOffset = t / 50,
+				g.quadraticCurveTo(avg(x, a), avg(y, b) - 100, x, y),
+				g.stroke(),
+				g.setLineDash([]),
+				g.beginPath(),
+				drawDot(a, b),
+				g.fillStyle = "red",
+				g.fill();
+			else if (!mH.eq(e.p))
+				drawX(a, b)
+		},
+		r: e => moveEnt(cM, e, mH)
+	},
+	{
+		n: "Tongue",
+		s: "tongue",
+		l: expTargs(5, (i, e) => [e && e.i.p, e]),
+		d: e => {
+			let [x, y] = hexToCan(e.p, vp.x, vp.y),
+			    [a, b] = hexToCan(mH, vp.x, vp.y);
+			bStr(g, "red", 2, a, b);
+			
+			if (sT[mH])
+				g.lineTo(x, y),
+				g.stroke(),
+				g.beginPath(),
+				drawDot(a, b),
+				g.fillStyle = "red",
+				g.fill();
+			else if (!mH.eq(e.p))
+				drawX(a, b)
+		},
+		r: e => 0
+	}
+];
+
 ent = {
 	forgB: {
 		p: 1,
-		m: e => {
-			let i, o, t, s = {};
-			for (i of e.p.iRing(3)) {
-				for (i of Hex.line(e.p, i)) {
-					if (i.eq(e.p) || !(t = getT(cM.t, i)) || !t.p)
-						continue;
-					if (o = cM.ep[i])
-						if (o.i.t) break;
-						else continue;
-					s[i] = i;
-				}
-			}
-			return s;
-		}
+		m: [0, 1]
 	},
 	tree: {t: 1}
 };
@@ -190,32 +239,11 @@ for (n in ent)
 	e.d = e.d || (e =>
 		drawSprite(g, e.i.s, ...hexToCan(e.p, vp.x, vp.y))),
 	e.de = e.de || (e => {
-		drawSelect(e.p);
-		for (let p in sT) drawSelect(sT[p]);
-	}),
-	e.dl = e.dl || ((e, x,y,f,a,b) => {
-		[x, y] = hexToCan(e.p, vp.x, vp.y);
-		y -= e.i.h;
-		[a, b] = f = hexToCan(mH, vp.x, vp.y);
-		bStr(g, "red", 2, ...f);
-		
-		if (sT[mH])
-			g.setLineDash([15, 5]),
-			g.lineDashOffset = t / 50,
-			g.quadraticCurveTo(avg(x, a), avg(y, b) - 100, x, y),
-			g.stroke(),
-			g.setLineDash([]),
-			g.beginPath(),
-			g.ellipse(a-.5, b-.5, 4, 2, 0, 0, 7),
-			g.fillStyle = "red",
-			g.fill();
-		else if (!mH.eq(e.p))
-			x = a - 7,
-			a = a + 7,
-			y = b - 3,
-			b = b + 3,
-			line(g, x, y, a, b),
-			line(g, x, b, a, y)
+		if (sM)
+			for (let p in sT)
+				drawSelect(sT[p]);
+		else
+			drawSelect(e.p);
 	});
 
 maps = {
@@ -239,26 +267,18 @@ maps = {
 	}
 };
 
-getT = (m, {x, y}, r) => (r = m[y], r[x - r[0] + 1]);
-setT = (m, {x, y}, t, r) => (r = m[y], r[x - r[0] + 1] = t);
-
-strP = (x, y) => x + "," + y;
-
-vp = new DOMRect(-9e9, -9e9, c.width, c.height);
-sE = 0;
-selE = e => (sE = e) && e.m && (sT = e.m());
-d = 0;
 loadMap = m => {
 	let ay = (m.w - 1)/2 |0,
 	c = {
 		f: m,
 		t: [],
 		ay: ay,
-		camb: new DOMRect(
-			-TILE_HALF_WIDTH,
-			-TILE_HALF_HEIGHT + ay * TILE_HEIGHT,
-			m.w * TILE_SPREAD - TILE_CAP_WIDTH_P1,
-			m.h * TILE_HEIGHT),
+		cb: {
+			xn: -15 - TILE_HALF_WIDTH,
+			yn: -15 - TILE_HALF_HEIGHT + ay * TILE_HEIGHT,
+			xx:  15 + m.w * TILE_SPREAD - TILE_CAP_WIDTH_P1,
+			yx:  15 + m.h * TILE_HEIGHT
+		},
 		ep: {},
 		e: []
 	}, x, y, r, z;
@@ -282,12 +302,31 @@ loadMap = m => {
 			},
 			r.d = r.i.d.bind(0, r),
 			r.de = r.i.de.bind(0, r),
-			r.dl = r.i.dl.bind(0, r),
-			r.i.m && (r.m = r.i.m.bind(0, r)),
+			r.i.m && (r.m = r.i.m.map(i => moves[i])),
 			c.ep[y.p] = r,
 			c.e.push(r);
 	c.e.d = 1;
 	return c;
+};
+
+getT = (m, {x, y}, r) => (r = m[y], r[x - r[0] + 1]);
+setT = (m, {x, y}, t, r) => (r = m[y], r[x - r[0] + 1] = t);
+
+strP = (x, y) => x + "," + y;
+
+vp = new DOMRect(-9e9, -9e9, c.width, c.height);
+sE = sM = sMB = 0;
+selE = (e, m) => {
+	sE = e;
+	sM = 0;
+	sT = {};
+	f.innerHTML = "";
+	if (e && e.m) {
+		for (m of e.m)
+			f.append(makeMoveB(m));
+		f.children[0].click()
+	}
+	onresize();
 };
 
 compHexY = (a, b) => a.p.y + a.p.x/2 - b.p.y - b.p.x/2;
@@ -297,36 +336,26 @@ moveEnt = (m, e, {x, y}) => {
 	m.ep[e.p] = e;
 };
 
-drawTiles = (t, x,y) => {
-	for (y = t.length - 1; y >= 0; --y)
-		for (x = t[y].length - 1; x > 0; --x)
-			drawSprite(g, t[y][x].s, ...hexToCan(H(x + t[y][0] - 1, y),
-				vp.x + TILE_HALF_WIDTH, vp.y + TILE_HALF_HEIGHT));
-};
-drawSelect = p =>
-	drawSprite(g, "highlight", ...hexToCan(p,
-		vp.x, vp.y));
-drawEnt = (e, i) => {
-	if(e.d)
-		e.sort(compHexY),
-		e.d = 0;
-	sE && sE.de();
-	for (i of e) i.d();
-	sE && sE.dl();
-};
-drawMap = m => {
-	clear();
-	drawTiles(m.t);
-	drawEnt(m.e);
-};
-
 clampVP = (v, b) => {
-	v.x = clamp(v.x, b.x, b.width - v.width);
-	v.y = clamp(v.y, b.y, b.height - v.height);
+	v.x = clamp(v.x, b.xn, b.xx - v.width);
+	v.y = clamp(v.y, b.yn, b.yx - v.height);
 };
 
 cM = loadMap(maps.test);
-clampVP(vp, cM.camb);
+clampVP(vp, cM.cb);
+
+makeButton = (s, n, e, c) => (
+	c = makeCanvas(16, 16, g => drawSprite(g, s)),
+	c.onclick = e,
+	c.className = "b",
+	c.title = n,
+	c);
+makeMoveB = m => makeButton(m.s, m.n, e => {
+	sMB.className = "b";
+	sT = m.l(sE);
+	sM = m;
+	(sMB = e.target).className = "b s";
+});
 
 // VECTOR CONVERSIONS
 scrToCan = (x, y, r) => (
@@ -337,10 +366,42 @@ hexToCan = ({x, y}, ox, oy) => [TILE_SPREAD * x - ox |0, TILE_HEIGHT * (y + x/2)
 canToHex = (x, y, ox, oy, t) => (t = (x + ox) / TILE_SPREAD, H(t, (y + oy) / TILE_HEIGHT - t/2));
 eToHex = (e, ox, oy) => canToHex(...eToCan(e), ox, oy);
 
+drawTiles = (t, x,y) => {
+	for (y = t.length - 1; y >= 0; --y)
+		for (x = t[y].length - 1; x > 0; --x)
+			drawSprite(g, t[y][x].s, ...hexToCan(H(x + t[y][0] - 1, y),
+				vp.x + TILE_HALF_WIDTH, vp.y + TILE_HALF_HEIGHT));
+};
+drawSelect = p =>
+	drawSprite(g, "highlight", ...hexToCan(p,
+		vp.x, vp.y));
+drawDot = (x, y) => {
+	g.ellipse(x-.5, y-.5, 4, 2, 0, 0, 7);
+};
+drawX = (x, y) => {
+	let a = x - 7,
+	    b = x + 7,
+	    c = y - 3,
+	    d = y + 3;
+	line(g, a, c, b, d);
+	line(g, b, c, a, d)
+};
+drawEnt = (e, i) => {
+	if(e.d)
+		e.sort(compHexY),
+		e.d = 0;
+	sE && sE.de();
+	for (i of e) i.d();
+	sM && sM.d(sE);
+};
 render = d => {
 	t = d;
 	dt = t - oldT;
-	drawMap(cM);
+	
+	clear();
+	drawTiles(cM.t);
+	drawEnt(cM.e);
+	
 	oldT = t;
 	requestAnimationFrame(render);
 };
@@ -400,9 +461,8 @@ c.onmousedown = (e, t) => {
 	}
 	
 	if (sE && e.button == 2 && sT[mH])
-		moveEnt(cM, sE, mH),
-		selE(0),
-		cM.e.d = 1;
+		sM.r(sE),
+		selE(0);
 };
 onmousemove = (e, h) => {
 	mP = [e.pageX, e.pageY];
@@ -412,7 +472,7 @@ onmousemove = (e, h) => {
 	case MOUSE_VIEW_DRAG:
 		vp.x = drStCX + (drStMX - e.pageX)/4 |0;
 		vp.y = drStCY + (drStMY - e.pageY)/4 |0;
-		clampVP(vp, cM.camb);
+		clampVP(vp, cM.cb);
 		break;
 	}
 };
@@ -424,9 +484,21 @@ onmouseup = e => {
 	}
 };
 c.oncontextmenu = e => !1;
-onresize = e => (
-	vp.width  = c.width  = innerWidth  / 4 |0,
-	vp.height = c.height = innerHeight / 4 |0,
-	c.style.width = c.width * 4,
-	c.style.height = c.height * 4,
-	clampVP(vp, cM.camb))
+onresize = e => {
+	c.style.width = c.style.height = "100%";
+	c.offsetWidth; // Trigger reflow
+	let b = c.getBoundingClientRect();
+	vp.width  = c.width  = b.width  / 4 |0;
+	vp.height = c.height = b.height / 4 |0;
+	c.style.width  = c.width  * 4;
+	c.style.height = "";
+	clampVP(vp, cM.cb)
+}
+onwheel = e => {
+	if (sE) {
+		let d = e.deltaY,
+		    t = sMB[(d < 0 ? "next" : "previous") + "Sibling"];
+		if (!t) t = f[(d < 0 ? "first" : "last") + "Child"];
+		t.click()
+	}
+}
