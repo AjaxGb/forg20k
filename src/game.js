@@ -250,8 +250,9 @@ maps = {
 	test: {
 		w: 20, h: 30,
 		d: 0,
-		r: [
-			{t:1,x:1,y:5,w:3,h:3}
+		x: [
+			{t: 1, p: [8, 7], r: 1},
+			{t: 1, p: [11, 12], r: 3}
 		],
 		e: {
 			forgB: [
@@ -281,36 +282,39 @@ loadMap = m => {
 		},
 		ep: {},
 		e: []
-	}, x, y, r, z;
+	}, x, y, i, z;
 	for (y = 0; y < m.h + 2 * ay; ++y) {
 		c.t[y] = [2 * max(ay - y, 0)];
 		for (x = m.w - c.t[y][0]; x > 2 * max(y - 2 * ay - 2, 0); --x)
 			c.t[y].push(tiles[m.d]);
 	}
-	// Place "rectangles" (might remove)
-	for (r of m.r)
-		for (y = 0; y < r.h; ++y)
-			for (x = 0; x < r.w; ++x)
-				z = c.t[r.y + y],
-				z[r.x + x + z[0]] = tiles[r.t];
+	// Place hexagons
+	for (i of m.x)
+		for (x of H(...i.p).iRad(i.r))
+			setT(c.t, x, tiles[i.t]);
 	// Place entities
 	for (x in m.e)
 		for (y of m.e[x])
-			r = {
+			i = {
 				i: ent[x],
 				p: H(...y.p)
 			},
-			r.d = r.i.d.bind(0, r),
-			r.de = r.i.de.bind(0, r),
-			r.i.m && (r.m = r.i.m.map(i => moves[i])),
-			c.ep[y.p] = r,
-			c.e.push(r);
+			i.d = i.i.d.bind(0, i),
+			i.de = i.i.de.bind(0, i),
+			i.i.m && (i.m = i.i.m.map(i => moves[i])),
+			c.ep[y.p] = i,
+			c.e.push(i);
 	c.e.d = 1;
 	return c;
 };
 
-getT = (m, {x, y}, r) => (r = m[y], r[x - r[0] + 1]);
-setT = (m, {x, y}, t, r) => (r = m[y], r[x - r[0] + 1] = t);
+getT = (m, {x, y}, r) => (r = m[y], r && r[x - r[0] + 1]);
+setT = (m, {x, y}, t, r,c) => (
+	r = m[y],
+	r && (
+		c = x - r[0] + 1,
+		c > 0 && r[c] && (
+			r[c] = t)));
 
 strP = (x, y) => x + "," + y;
 
