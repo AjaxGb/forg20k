@@ -442,7 +442,7 @@ createImageBitmap(new Blob([sa], {type: png})).then(s => {
 	setTimeout(() => {
 		oldT = performance.now();
 		requestAnimationFrame(render);
-	}, 2e3);
+	}, %%STARTUP_DELAY%%);
 });
 
 /* Mouse state:

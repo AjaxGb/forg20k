@@ -13,7 +13,12 @@ echo **CONVERTING SPRITE SHEET TO TEXT
 python _binary_to_string.py gen/sprites.png gen/sprites_ascii.js s
 echo.
 echo **BUILDING HTML FILE
-python _insert_scripts.py gen/uncompressed.html index_template.txt gen/sprites_ascii.js gen/sprites_meta.js game.js
+if not defined DEV (
+	set STARTUP_DELAY=3e3
+) else (
+	set STARTUP_DELAY=0
+)
+python _insert_scripts.py -r STARTUP_DELAY %STARTUP_DELAY% gen/uncompressed.html index_template.txt gen/sprites_ascii.js gen/sprites_meta.js game.js
 echo.
 
 if not defined DEV (
