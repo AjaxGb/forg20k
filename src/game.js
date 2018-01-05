@@ -14,7 +14,7 @@ png = "image/png";
 doc = document;
 cEl = doc.createElement.bind(doc);
 
-for (n of "min,max,round,abs,random".split(",")) window[n] = Math[n];
+for (n of "min,max,round,abs,random,sin".split(",")) window[n] = Math[n];
 clamp = (x, a, b) => max(min(x, b), a);
 avg = (a, b) => (a + b) / 2;
 lerp = (a, b, t) => a + (b - a) * t;
@@ -184,7 +184,7 @@ moves = [
 		d: e => {
 			let [x, y] = hexToCan(e.p, vp.x, vp.y),
 			    [a, b] = hexToCan(mH, vp.x, vp.y);
-			y -= e.i.h;
+			y -= e.i.t;
 			bStr(g, "red", 2, a, b);
 			
 			if (sT[mH])
@@ -221,7 +221,7 @@ moves = [
 			else if (!mH.eq(e.p))
 				drawX(g, a, b, 7, 3)
 		},
-		r: e => e.i.dam(cM.ep[mH], 7)
+		r: e => e.i.dam(cM.ep[mH], rnd(5, 8))
 	}
 ];
 
@@ -235,7 +235,7 @@ ent = {
 };
 for (n in ent)
 	e = ent[n],
-	e.h = e.h || 7,
+	e.t = e.t || 7,
 	e.s = e.s || n,
 	e.d = e.d || ((e, p) => {
 		p = hexToCan(e.p, vp.x, vp.y);
@@ -254,24 +254,31 @@ for (n in ent)
 		else
 			drawSelect(e.p);
 	}),
-	e.dam = e.dam || ((e, d) => {
+	e.dam = e.dam || ((e, d, x,y) => {
+		d = min(d, e.h);
+		[x, y] = hexToWor(e.p);
+		cM.p.push(txtP(x, y - e.i.t, "-"+d, "red"))
 		e.h -= d;
-		if (e.h <= 0) e.h = 0, e.k = 1;
-		kE.push(e);
+		if (e.h <= 0)
+			e.h = 0,
+			e.k = 1,
+			kE.push(e);
 	});
 
 // PARTICLES
 
-txtP = (x, y, w, c, f, e) => (e = t + 3e3, {
-	u: _ => (
-		g.fillStyle = c,
-		g.font = f || "8px Arial",
-		g.textAlign = "center",
-		g.fillText(w, x + sin(t/100) * 2 |0, y|0),
-		y -= .01 * dt,
-		t >= e
-	)
-});
+txtP = (x, y, w, c, f=snum, e,i) => (
+	e = t + 2e3,
+	i = genTxt(w, c, f),
+	x -= i.width / 2,
+	{
+		u: _ => (
+			g.drawImage(i, x + sin(t/100) * 2 - vp.x |0, y - vp.y |0),
+			y -= .01 * dt,
+			t >= e
+		)
+	}
+);
 
 maps = {
 	test: {
@@ -399,6 +406,8 @@ scrToCan = (x, y, r) => (
 eToCan = e => scrToCan(e.pageX, e.pageY);
 hexToCan = ({x, y}, ox, oy) => [TILE_SPREAD * x - ox |0, TILE_HEIGHT * (y + x/2) - oy |0];
 canToHex = (x, y, ox, oy, t) => (t = (x + ox) / TILE_SPREAD, H(t, (y + oy) / TILE_HEIGHT - t/2));
+hexToWor = h => hexToCan(h, 0, 0);
+worToHex = (x, y) => canToHex(x, y, 0, 0);
 eToHex = (e, ox, oy) => canToHex(...eToCan(e), ox, oy);
 
 drawTiles = (t, x,y) => {
@@ -421,26 +430,26 @@ drawX = (g, x, y, w, h) => {
 	line(g, a, c, b, d);
 	line(g, b, c, a, d)
 };
-drawTxt = (g, x, y, t, c, s,i) => {
+drawTxt = (g, x, y, t, c, f=fnt, s,i) => {
 	if (c)
-		return g.drawImage(genTxt(t, c), x, y);
+		return g.drawImage(genTxt(t, c, f), x, y);
 	s = x;
 	for (i of t)
 		if (i == "\n")
 			x = s,
-			y += 9;
+			y += f.h;
 		else
-			g.drawImage(fnt[i.charCodeAt(0) - 32] || fnt[31], x, y),
-			x += 6;
+			g.drawImage(f[i.charCodeAt(0)] || f.u, x, y),
+			x += f.w;
 };
-msrTxt = t => (
+msrTxt = (t, f=fnt) => (
 	t = t.split("\n"),
-	[t.reduce((a, s) => max(a, s.length), 0) * 6, t.length * 9]
+	[t.reduce((a, s) => max(a, s.length), 0) * f.w, t.length * f.h]
 );
-genTxt = (t, c, b) => (
-	b = msrTxt(t),
+genTxt = (t, c, f=fnt, b) => (
+	b = msrTxt(t, f),
 	makeCanvas(...b, g => {
-		drawTxt(g, 0, 0, t);
+		drawTxt(g, 0, 0, t, 0, f);
 		if (c)
 			g.fillStyle = c,
 			g.globalCompositeOperation = "source-in",
@@ -467,9 +476,6 @@ render = d => {
 	drawEnt(cM.e);
 	doParticles(cM);
 	
-	drawTxt(g, 0, 0, "Hello, my friends. What's up?",
-		"hsl("+(t/5)+", 100%, 50%)");
-	
 	oldT = t;
 	requestAnimationFrame(render);
 };
@@ -493,12 +499,30 @@ createImageBitmap(new Blob([sa], {type: png})).then(s => {
 			b[2] * c, b[3] * c),
 		g);
 	clear = _ => g.clearRect(0, 0, c.width, c.height);
+	
 	fnt = [];
-	for (let i = 0, x, y; i < 95; ++i)
-		[x, y] = sb.font.b,
-		fnt.push(makeCanvas(6, 8, g =>
-			g.drawImage(s, x + i%19*6, y + (i/19|0)*8, 6, 8, 0, 0, 6, 8)
-		));
+	for (var i = 0, [x, y] = sb.font.b; i < 95; ++i)
+		fnt[i + 32] = makeCanvas(5, 8, g =>
+			g.drawImage(s, x + i%19*5, y + (i/19|0)*8, 5, 8, 0, 0, 5, 8)
+		);
+	fnt.w = 6;
+	fnt.h = 9;
+	fnt.u = fnt[63];
+	
+	snum = [];
+	for (i = 0, [x, y] = sb.snum.b; i < 10; ++i)
+		snum[i + 48] = makeCanvas(3, 5, g =>
+			g.drawImage(s, x + i*3, y, 3, 5, 0, 0, 3, 5)
+		);
+	snum[43] = makeCanvas(3, 5, g =>
+		g.drawImage(s, x + 30, y, 3, 5, 0, 0, 3, 5)
+	);
+	snum[45] = makeCanvas(3, 5, g =>
+		g.drawImage(s, x + 33, y, 3, 5, 0, 0, 3, 5)
+	);
+	snum.w = 4;
+	snum.h = 5;
+	snum.u = snum[48];
 	
 	// Draw favicon
 	g = drawSprite(c.getContext('2d'), "favicon");
