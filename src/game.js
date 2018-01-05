@@ -232,9 +232,7 @@ for (n in ent)
 		drawSprite(g, e.i.s, ...p);
 		if (e.k)
 			g.globalAlpha = 1,
-			bStr(g, "red", 2, 0, 0),
-			drawX(g, ...p, 4, 4),
-			g.stroke();
+			drawTxt(g, ...p, "DEAD", "#900", fnt, 1, 1);
 	}),
 	e.de = e.de || (e => {
 		if (sM)
