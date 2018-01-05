@@ -14,10 +14,11 @@ png = "image/png";
 doc = document;
 cEl = doc.createElement.bind(doc);
 
-for (n of ["min","max","round","abs"]) window[n] = Math[n];
+for (n of "min,max,round,abs,random".split(",")) window[n] = Math[n];
 clamp = (x, a, b) => max(min(x, b), a);
 avg = (a, b) => (a + b) / 2;
 lerp = (a, b, t) => a + (b - a) * t;
+rnd = (l, h) => random() * (h - l + 1) + l |0;
 
 H = (x, y) => new Hex(x, y);
 class Hex {
@@ -197,7 +198,7 @@ moves = [
 				g.fillStyle = "red",
 				g.fill();
 			else if (!mH.eq(e.p))
-				drawX(a, b)
+				drawX(g, a, b, 7, 3)
 		},
 		r: e => moveEnt(cM, e, mH)
 	},
@@ -207,7 +208,7 @@ moves = [
 		l: expTargs(5, (i, e) => [e && e.i.p, e]),
 		d: e => {
 			let [x, y] = hexToCan(e.p, vp.x, vp.y),
-			    [a, b] = hexToCan(mH, vp.x, vp.y);
+				[a, b] = hexToCan(mH, vp.x, vp.y);
 			bStr(g, "red", 2, a, b);
 			
 			if (sT[mH])
@@ -218,16 +219,17 @@ moves = [
 				g.fillStyle = "red",
 				g.fill();
 			else if (!mH.eq(e.p))
-				drawX(a, b)
+				drawX(g, a, b, 7, 3)
 		},
-		r: e => 0
+		r: e => e.i.dam(cM.ep[mH], 7)
 	}
 ];
 
 ent = {
 	forgB: {
 		p: 1,
-		m: [0, 1]
+		m: [0, 1],
+		h: 20
 	},
 	tree: {t: 1}
 };
@@ -235,15 +237,41 @@ for (n in ent)
 	e = ent[n],
 	e.h = e.h || 7,
 	e.s = e.s || n,
-	e.d = e.d || (e =>
-		drawSprite(g, e.i.s, ...hexToCan(e.p, vp.x, vp.y))),
+	e.d = e.d || ((e, p) => {
+		p = hexToCan(e.p, vp.x, vp.y);
+		if (e.k) g.globalAlpha = 0.5;
+		drawSprite(g, e.i.s, ...p);
+		if (e.k)
+			g.globalAlpha = 1,
+			bStr(g, "red", 2, 0, 0),
+			drawX(g, ...p, 4, 4),
+			g.stroke();
+	}),
 	e.de = e.de || (e => {
 		if (sM)
 			for (let p in sT)
 				drawSelect(sT[p]);
 		else
 			drawSelect(e.p);
+	}),
+	e.dam = e.dam || ((e, d) => {
+		e.h -= d;
+		if (e.h <= 0) e.h = 0, e.k = 1;
+		kE.push(e);
 	});
+
+// PARTICLES
+
+txtP = (x, y, w, c, f, e) => (e = t + 3e3, {
+	u: _ => (
+		g.fillStyle = c,
+		g.font = f || "8px Arial",
+		g.textAlign = "center",
+		g.fillText(w, x + sin(t/100) * 2 |0, y|0),
+		y -= .01 * dt,
+		t >= e
+	)
+});
 
 maps = {
 	test: {
@@ -301,9 +329,12 @@ loadMap = m => {
 			i.d = i.i.d.bind(0, i),
 			i.de = i.i.de.bind(0, i),
 			i.i.m && (i.m = i.i.m.map(i => moves[i])),
+			i.h = y.h || i.i.h,
+			i.mh = y.mh || i.i.h,
 			c.ep[y.p] = i,
 			c.e.push(i);
 	c.e.d = 1;
+	c.p = [];
 	return c;
 };
 
@@ -319,6 +350,7 @@ strP = (x, y) => x + "," + y;
 
 vp = new DOMRect(-9e9, -9e9, c.width, c.height);
 sE = sM = sMB = 0;
+kE = [];
 selE = (e, m) => {
 	sE = e;
 	sM = 0;
@@ -381,14 +413,40 @@ drawSelect = p =>
 drawDot = (x, y) => {
 	g.ellipse(x-.5, y-.5, 4, 2, 0, 0, 7);
 };
-drawX = (x, y) => {
-	let a = x - 7,
-	    b = x + 7,
-	    c = y - 3,
-	    d = y + 3;
+drawX = (g, x, y, w, h) => {
+	let a = x - w,
+		b = x + w,
+		c = y - h,
+		d = y + h;
 	line(g, a, c, b, d);
 	line(g, b, c, a, d)
 };
+drawTxt = (g, x, y, t, c, s,i) => {
+	if (c)
+		return g.drawImage(genTxt(t, c), x, y);
+	s = x;
+	for (i of t)
+		if (i == "\n")
+			x = s,
+			y += 9;
+		else
+			g.drawImage(fnt[i.charCodeAt(0) - 32] || fnt[31], x, y),
+			x += 6;
+};
+msrTxt = t => (
+	t = t.split("\n"),
+	[t.reduce((a, s) => max(a, s.length), 0) * 6, t.length * 9]
+);
+genTxt = (t, c, b) => (
+	b = msrTxt(t),
+	makeCanvas(...b, g => {
+		drawTxt(g, 0, 0, t);
+		if (c)
+			g.fillStyle = c,
+			g.globalCompositeOperation = "source-in",
+			g.fillRect(0, 0, ...b)
+	})
+);
 drawEnt = (e, i) => {
 	if(e.d)
 		e.sort(compHexY),
@@ -397,6 +455,9 @@ drawEnt = (e, i) => {
 	for (i of e) i.d();
 	sM && sM.d(sE);
 };
+doParticles = m => {
+	m.p = m.p.filter(i => !i.u())
+};
 render = d => {
 	t = d;
 	dt = t - oldT;
@@ -404,6 +465,10 @@ render = d => {
 	clear();
 	drawTiles(cM.t);
 	drawEnt(cM.e);
+	doParticles(cM);
+	
+	drawTxt(g, 0, 0, "Hello, my friends. What's up?",
+		"hsl("+(t/5)+", 100%, 50%)");
 	
 	oldT = t;
 	requestAnimationFrame(render);
@@ -427,7 +492,13 @@ createImageBitmap(new Blob([sa], {type: png})).then(s => {
 			y - o[1] * c |0,
 			b[2] * c, b[3] * c),
 		g);
-	clear = _=> g.clearRect(0, 0, c.width, c.height);
+	clear = _ => g.clearRect(0, 0, c.width, c.height);
+	fnt = [];
+	for (let i = 0, x, y; i < 95; ++i)
+		[x, y] = sb.font.b,
+		fnt.push(makeCanvas(6, 8, g =>
+			g.drawImage(s, x + i%19*6, y + (i/19|0)*8, 6, 8, 0, 0, 6, 8)
+		));
 	
 	// Draw favicon
 	g = drawSprite(c.getContext('2d'), "favicon");
@@ -453,7 +524,7 @@ mSt = 0;
 
 c.onmousedown = (e, t) => {
 	if (mSt == MOUSE_NONE && e.button == 0) {
-		if ((t = cM.ep[eToHex(e, vp.x, vp.y).round()]) && t.i.p)
+		if ((t = cM.ep[eToHex(e, vp.x, vp.y).round()]) && t.i.p && !t.k)
 			selE((sE == t) ? 0 : t);
 		else
 			mSt = MOUSE_VIEW_DRAG,
