@@ -29,18 +29,6 @@ class Hex {
 	get z() {
 		return -this.x - this.y
 	}
-	get [0]() {
-		throw 1;
-		return this.x
-	}
-	get [1]() {
-		throw 2;
-		return this.y
-	}
-	get [2]() {
-		throw 3;
-		return this.z;
-	}
 	map(f) {
 		return H(f(this.x), f(this.y))
 	}
@@ -118,6 +106,7 @@ Hex.dirs = [
 	H( 1,-1), H( 1,0), H(0, 1),
 	H(-1, 1), H(-1,0), H(0,-1)
 ];
+Hex.zero = mH = H(0,0)
 
 makeCanvas = (w, h, d, c) => (
 	c = cEl("canvas"),
@@ -182,8 +171,8 @@ moves = [
 		s: "jump",
 		l: expTargs(5, (i, e) => [!e, e && e.i.t]),
 		d: e => {
-			let [x, y] = hexToCan(e.p, vp.x, vp.y),
-			    [a, b] = hexToCan(mH, vp.x, vp.y);
+			let [x, y] = hexToCan(e.p),
+			    [a, b] = hexToCan(mH);
 			y -= e.i.t;
 			bStr(g, "red", 2, a, b);
 			
@@ -207,8 +196,8 @@ moves = [
 		s: "tongue",
 		l: expTargs(5, (i, e) => [e && e.i.p, e]),
 		d: e => {
-			let [x, y] = hexToCan(e.p, vp.x, vp.y),
-				[a, b] = hexToCan(mH, vp.x, vp.y);
+			let [x, y] = hexToCan(e.p),
+				[a, b] = hexToCan(mH);
 			bStr(g, "red", 2, a, b);
 			
 			if (sT[mH])
@@ -238,7 +227,7 @@ for (n in ent)
 	e.t = e.t || 7,
 	e.s = e.s || n,
 	e.d = e.d || ((e, p) => {
-		p = hexToCan(e.p, vp.x, vp.y);
+		p = hexToCan(e.p);
 		if (e.k) g.globalAlpha = 0.5;
 		drawSprite(g, e.i.s, ...p);
 		if (e.k)
@@ -404,11 +393,11 @@ scrToCan = (x, y, r) => (
 	r = c.getBoundingClientRect(),
 	[(x - r.x) / 4, (y - r.y) / 4]);
 eToCan = e => scrToCan(e.pageX, e.pageY);
-hexToCan = ({x, y}, ox, oy) => [TILE_SPREAD * x - ox |0, TILE_HEIGHT * (y + x/2) - oy |0];
-canToHex = (x, y, ox, oy, t) => (t = (x + ox) / TILE_SPREAD, H(t, (y + oy) / TILE_HEIGHT - t/2));
+hexToCan = ({x, y}, ox=vp.x, oy=vp.y) => [TILE_SPREAD * x - ox |0, TILE_HEIGHT * (y + x/2) - oy |0];
+canToHex = (x, y, ox=vp.x, oy=vp.y, t) => (t = (x + ox) / TILE_SPREAD, H(t, (y + oy) / TILE_HEIGHT - t/2));
 hexToWor = h => hexToCan(h, 0, 0);
 worToHex = (x, y) => canToHex(x, y, 0, 0);
-eToHex = (e, ox, oy) => canToHex(...eToCan(e), ox, oy);
+eToHex = (e, ox=vp.x, oy=vp.y) => canToHex(...eToCan(e), ox, oy);
 
 drawTiles = (t, x,y) => {
 	for (y = t.length - 1; y >= 0; --y)
@@ -417,8 +406,7 @@ drawTiles = (t, x,y) => {
 				vp.x + TILE_HALF_WIDTH, vp.y + TILE_HALF_HEIGHT));
 };
 drawSelect = p =>
-	drawSprite(g, "highlight", ...hexToCan(p,
-		vp.x, vp.y));
+	drawSprite(g, "highlight", ...hexToCan(p));
 drawDot = (x, y) => {
 	g.ellipse(x-.5, y-.5, 4, 2, 0, 0, 7);
 };
@@ -430,7 +418,13 @@ drawX = (g, x, y, w, h) => {
 	line(g, a, c, b, d);
 	line(g, b, c, a, d)
 };
-drawTxt = (g, x, y, t, c, f=fnt, s,i) => {
+drawTxt = (g, x, y, t, c, f=fnt, cX, cY, s,i,w,h) => {
+	if (cX || cY)
+		[w, h] = msrTxt(t, f);
+	if (cX) x -= w / 2;
+	if (cY) y -= h / 2;
+	x = x|0;
+	y = y|0;
 	if (c)
 		return g.drawImage(genTxt(t, c, f), x, y);
 	s = x;
@@ -456,12 +450,23 @@ genTxt = (t, c, f=fnt, b) => (
 			g.fillRect(0, 0, ...b)
 	})
 );
-drawEnt = (e, i) => {
+drawEnt = (e, i,x,y,s,h) => {
 	if(e.d)
 		e.sort(compHexY),
 		e.d = 0;
 	sE && sE.de();
 	for (i of e) i.d();
+	for (i of e) if (i.mh && !i.k)
+		[x, y] = hexToCan(i.p),
+		s = mH.eq(i.p),
+		h = s ? 3 : 1,
+		g.fillStyle = "#000",
+		g.fillRect(x - 12, y + 5, 23, h + 2),
+		g.fillStyle = "#c00",
+		g.fillRect(x - 11, y + 6, 21, h),
+		g.fillStyle = "#0a0",
+		g.fillRect(x - 11, y + 6, (21 * i.h / i.mh)|0, h),
+		s && drawTxt(g, x, y + 5, i.h+"/"+i.mh, 0, snum, 1);
 	sM && sM.d(sE);
 };
 doParticles = m => {
@@ -514,12 +519,8 @@ createImageBitmap(new Blob([sa], {type: png})).then(s => {
 		snum[i + 48] = makeCanvas(3, 5, g =>
 			g.drawImage(s, x + i*3, y, 3, 5, 0, 0, 3, 5)
 		);
-	snum[43] = makeCanvas(3, 5, g =>
-		g.drawImage(s, x + 30, y, 3, 5, 0, 0, 3, 5)
-	);
-	snum[45] = makeCanvas(3, 5, g =>
-		g.drawImage(s, x + 33, y, 3, 5, 0, 0, 3, 5)
-	);
+	[43, 45, 47].forEach((c, i) => snum[c] = makeCanvas(3, 5,
+		g => g.drawImage(s, x + 30 + i * 3, y, 3, 5, 0, 0, 3, 5)));
 	snum.w = 4;
 	snum.h = 5;
 	snum.u = snum[48];
@@ -548,7 +549,7 @@ mSt = 0;
 
 c.onmousedown = (e, t) => {
 	if (mSt == MOUSE_NONE && e.button == 0) {
-		if ((t = cM.ep[eToHex(e, vp.x, vp.y).round()]) && t.i.p && !t.k)
+		if ((t = cM.ep[eToHex(e).round()]) && t.i.p && !t.k)
 			selE((sE == t) ? 0 : t);
 		else
 			mSt = MOUSE_VIEW_DRAG,
@@ -563,8 +564,7 @@ c.onmousedown = (e, t) => {
 		selE(0);
 };
 onmousemove = (e, h) => {
-	mP = [e.pageX, e.pageY];
-	mH = eToHex(e, vp.x, vp.y).round();
+	mH = eToHex(e).round();
 	
 	switch (mSt) {
 	case MOUSE_VIEW_DRAG:
