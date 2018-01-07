@@ -1,7 +1,6 @@
 import os
 import sys
 import json
-import re
 from PIL import Image
 import rpack
 import numpy as np
@@ -19,9 +18,11 @@ class SubSprite:
 		return SubSprite((x + dx, y + dy, w, h), self.origin)
 
 class Sprite:
-	def __init__(self, name, imagefile, *, origin=(0, 0), subsprites={}):
+	def __init__(self, name, imagefile, *,
+			origin=(0, 0), subsprites={}, anim=None):
 		self.name = name
 		self.imagefile = imagefile
+		self.anim = anim
 		self.width, self.height = imagefile.size
 		self.subsprites = {subname: SubSprite(subbounds)
 			for subname, subbounds in subsprites.items()}
@@ -32,6 +33,28 @@ class Sprite:
 		return "<Sprite '{}' file={} w={} h={}>".format(
 			self.name, self.imagefile.filename, self.width, self.height)
 
+class Animation:
+	def __init__(self, name, imagefile, numframes, order=None, *, 
+			duration=None, origin=(0, 0)):
+		self.name = name
+		self.imagefile = imagefile
+		self.width, self.imageheight = imagefile.size
+		if self.imageheight % numframes != 0:
+			raise ValueError(
+				"Height of '{}' animation ({}) not a multiple of frame count ({})!"
+				.format(name, self.imageheight, numframes))
+		self.frameheight = self.imageheight // numframes
+		self.frames = [
+			Sprite(None, imagefile.crop((
+				0, i * self.frameheight,
+				self.width, (i + 1) * self.frameheight
+			)), anim=self)
+			for i in range(numframes) 
+		]
+		self.order = order
+		self.duration = duration
+		self.origin = origin
+
 print("Compiling sprites in", sprites_path)
 print()
 
@@ -40,6 +63,7 @@ print()
 #################################
 
 all_images = []
+all_anims = []
 
 for path, dirs, files in os.walk(sprites_path):
 	dir_images = {}
@@ -60,13 +84,24 @@ for path, dirs, files in os.walk(sprites_path):
 	for spritename, image in dir_images.items():
 		metafilepath = dir_metas.get(spritename, None)
 		if metafilepath != None:
+			print("Found meta for '{}'".format(spritename))
 			with open(metafilepath) as metafile:
 				metadata = json.load(metafile)
+			
 			subsprites = metadata.get("subsprites", {})
 			origin = metadata.get("origin", (0, 0))
 			
-			print("Found meta for", "'{}'".format(spritename), "containing",
-				len(subsprites), "subsprites.")
+			animmeta = metadata.get("anim", None)
+			if animmeta:
+				numframes = animmeta.get("numframes")
+				order = animmeta.get("order", list(range(numframes)))
+				duration = animmeta.get("duration", None)
+				
+				anim = Animation(spritename, image, numframes, order,
+					duration=duration, origin=origin)
+				all_anims.append(anim)
+				all_images.extend(anim.frames)
+				continue
 		else:
 			subsprites = {}
 			origin = (0, 0)
@@ -150,9 +185,11 @@ for i, (x, y) in enumerate(positions):
 	sprite_im.putpalette(palette_list)
 	sheet.paste(sprite_im, (x, y))
 	
-	all_subsprites.update(sprite.subsprites)
-	for spritename, subsprite in sprite.subsprites.items():
-		all_subsprites[spritename] = subsprite.offset(x, y)
+	if sprite.anim:
+		sprite.position = x, y
+	else:
+		for spritename, subsprite in sprite.subsprites.items():
+			all_subsprites[spritename] = subsprite.offset(x, y)
 
 sheet.save(gen_imagename, optimize=True, transparency=0)
 
@@ -161,15 +198,35 @@ print("Sheet saved")
 ##########################
 ## WRITE JS WITH BOUNDS ##
 ##########################
+
+metas = [
+	"{}:{{{}}}".format(
+		name,
+		(("o:[{}],".format(",".join(str(o) for o in subsprite.origin)))
+			if subsprite.origin != (0, 0) else "")
+		+ "b:[{}]".format(",".join(str(b) for b in subsprite.bounds)))
+	for name, subsprite in all_subsprites.items()
+] + [
+	"{}:{{{}}}".format(
+		anim.name,
+		(("o:[{}],".format(",".join(str(o) for o in anim.origin)))
+			if anim.origin != (0, 0) else "")
+		+ (("a:[{}],".format(",".join(str(f) for f in anim.order)))
+			if anim.order else "")
+		+ (("d:{},".format(anim.duration))
+			if anim.duration != None else "")
+		+ "s:[{},{}],".format(anim.width, anim.frameheight)
+		+ "f:[{}]".format(",".join(
+			"[{}]".format(",".join(str(b) for b in frame.position))
+			for frame in anim.frames)
+		)
+	)
+	for anim in all_anims
+]
+
 with open(gen_metaname, "w") as metafile:
-	print("sb={", ",".join([
-		(name if re.match("^[a-zA-Z_]\\w*$", name) else '"{}"'.format(name))
-		+ ":{"
-			+ (("o:[" + ",".join(str(o) for o in subsprite.origin) + "],")
-				if subsprite.origin != (0, 0) else "")
-			+ "b:[" + ",".join(str(b) for b in subsprite.bounds)
-		+ "]}"
-		for name, subsprite in all_subsprites.items()
-	]), "};", file=metafile, sep="", end="")
+	print("sb={", file=metafile, sep="", end="")
+	print(",".join(metas), file=metafile, sep="", end="")
+	print("};", file=metafile, sep="", end="")
 
 print("Meta file saved")

@@ -1,7 +1,3 @@
-// CONSTANTS
-MOUSE_NONE = 0;
-MOUSE_VIEW_DRAG = 1;
-
 TILE_HEIGHT = 16;
 TILE_HALF_HEIGHT = 8;
 TILE_SPREAD = 24;
@@ -9,6 +5,11 @@ TILE_CAP_WIDTH = 8;
 TILE_CAP_WIDTH_P1 = 9;
 TILE_WIDTH = 32;
 TILE_HALF_WIDTH = 16;
+
+for (n of Object.values(sb)) if (n.f)
+	n.d = (n.d == null) ? 20 : n.d, 
+	n.a = n.a || [...Array(n.f.length).keys()],
+	n.f = n.f.map(p => [...p, ...n.s]);
 
 png = "image/png";
 doc = document;
@@ -106,13 +107,17 @@ Hex.dirs = [
 	H( 1,-1), H( 1,0), H(0, 1),
 	H(-1, 1), H(-1,0), H(0,-1)
 ];
-Hex.zero = mH = H(0,0)
+mH = Hex.zero = H(0,0);
 
 makeCanvas = (w, h, d, c) => (
 	c = cEl("canvas"),
 	c.width = w,
 	c.height = h,
 	d(c.getContext("2d"), c),
+	c);
+scaleCanvas = (c, s) => (
+	c.style.width = c.width * s,
+	c.style.height = c.height * s,
 	c);
 makeDGrad = (g, y, h) => (
 	g = g.createLinearGradient(0, y, 0, y + h),
@@ -135,10 +140,10 @@ line = (g, a, b, c, d) => {
 
 sa = new Uint8Array(s.length*7/8);
 for (i = j = 0; i < s.length; ++i, ++j)
-	h = s.charCodeAt(i) % 65533,
+	n = s.charCodeAt(i) % 65533,
 	r = i % 8,
-	sa[j-1] |= h >> 7 - r,
-	sa[j]    = h << r + 1,
+	sa[j-1] |= n >> 7 - r,
+	sa[j]    = n << r + 1,
 	r == 7 && --j;
 
 tiles = [
@@ -148,6 +153,10 @@ tiles = [
 	},
 	{
 		s: "dirt",
+		p: 1
+	},
+	{
+		s: "water",
 		p: 1
 	}
 ];
@@ -165,11 +174,10 @@ expTargs = (r, f) => e => {
 	}
 	return s
 };
-moves = [
-	{
-		n: "Jump",
-		s: "jump",
-		l: expTargs(5, (i, e) => [!e, e && e.i.t]),
+moves = {
+	jump: {
+		n: "Hop",
+		l: expTargs(5, (i, e) => [!e, e && e.i.T]),
 		d: e => {
 			let [x, y] = hexToCan(e.p),
 			    [a, b] = hexToCan(mH);
@@ -189,12 +197,11 @@ moves = [
 			else if (!mH.eq(e.p))
 				drawX(g, a, b, 7, 3)
 		},
-		r: e => moveEnt(cM, e, mH)
+		r: (e, t) => moveEnt(cM, e, t)
 	},
-	{
-		n: "Tongue",
-		s: "tongue",
-		l: expTargs(5, (i, e) => [e && e.i.p, e]),
+	tongue: {
+		n: "Tongue Shot",
+		l: expTargs(3, (i, e) => [e && e.h, e]),
 		d: e => {
 			let [x, y] = hexToCan(e.p),
 				[a, b] = hexToCan(mH);
@@ -210,17 +217,44 @@ moves = [
 			else if (!mH.eq(e.p))
 				drawX(g, a, b, 7, 3)
 		},
-		r: e => e.i.dam(cM.ep[mH], rnd(5, 8))
+		r: (e, t) => (
+			t = cM.ep[t],
+			e.i.dam(t, rnd(5, 8)) && t.i.e && e.i.heal(e, rnd(...t.i.e))
+		)
+	},
+	mosq: {
+		n: "Make Buzz Bug",
+		l: expTargs(1, (i, e) => [!e, 0]),
+		r: (e, t) => {
+			addEnt(e.m, ent.mosq, e.t, t);
+			[x, y] = hexToWor(t);
+			cM.p.push(txtP(x, y - e.i.t, "HATCH", "#fff"));
+		}
 	}
-];
+};
+for (n in moves)
+	m = moves[n],
+	m.s = m.s || n;
 
 ent = {
 	forgB: {
-		p: 1,
-		m: [0, 1],
+		n: "BASIC FORG",
+		m: ["jump", "tongue"],
 		h: 20
 	},
-	tree: {t: 1}
+	mosq: {
+		n: "BUZZ BUGG",
+		h: 5, e: [5, 6]
+	},
+	mosqegg: {
+		n: "BUZZ BUGG NEST",
+		h: 15, e: [2, 4],
+		m: ["mosq"]
+	},
+	tree: {
+		n: "TREE",
+		T: 1
+	}
 };
 for (n in ent)
 	e = ent[n],
@@ -241,16 +275,26 @@ for (n in ent)
 		else
 			drawSelect(e.p);
 	}),
-	e.dam = e.dam || ((e, d, x,y) => {
-		d = min(d, e.h);
-		[x, y] = hexToWor(e.p);
-		cM.p.push(txtP(x, y - e.i.t, "-"+d, "red"))
-		e.h -= d;
-		if (e.h <= 0)
+	e.dam = e.dam || ((e, d, k,x,y) => (
+		d = (k = d >= e.h) ? e.h : d,
+		[x, y] = hexToWor(e.p),
+		cM.p.push(txtP(x, y - e.i.t,
+			k ? e.i.e ? "~NOM~" : "DEAD" : "-"+d, "red",
+			k ? fnt : snum)),
+		e.h -= d,
+		(e.h <= 0) ? (
 			e.h = 0,
 			e.k = 1,
-			kE.push(e);
-	});
+			delEnt(cM, e),
+			1
+		) : 0
+	)),
+	e.heal = e.heal || ((e, d, k,x,y) => (
+		d = min(e.mh - e.h, d),
+		[x, y] = hexToWor(e.p),
+		cM.p.push(txtP(x, y - e.i.t, "+"+d, "#073")),
+		e.h += d
+	));
 
 // PARTICLES
 
@@ -272,20 +316,43 @@ maps = {
 		w: 20, h: 30,
 		d: 0,
 		x: [
-			{t: 1, p: [8, 7], r: 1},
-			{t: 1, p: [11, 12], r: 3}
+			{t: 1, p: [7, 8], r: 1},
+			{t: 1, p: [11, 12], r: 3},
+			{t: 2, p: [15, 4], r: 5}
 		],
-		e: {
-			forgB: [
-				{p: [ 9, 9]},
-				{p: [ 8, 9]}
-			],
-			tree: [
-				{p: [10,10]},
-				{p: [ 8,11]},
-				{p: [12,12]}
-			]
-		}
+		t: [
+			{
+				e: {
+					tree: [
+						{p: [10,10]},
+						{p: [ 8,11]},
+						{p: [12,12]}
+					]
+				}
+			},
+			{
+				n: "Player 1",
+				p: 1,
+				e: {
+					forgB: [
+						{p: [ 9, 9]},
+						{p: [ 8, 9]}
+					]
+				}
+			},
+			{
+				n: "Buggs",
+				ai: 1,
+				e: {
+					mosq: [
+						{p: [13, 6]}
+					],
+					mosqegg: [
+						{p: [14, 6]}
+					]
+				}
+			}
+		]
 	}
 };
 
@@ -302,8 +369,11 @@ loadMap = m => {
 			yx:  15 + m.h * TILE_HEIGHT
 		},
 		ep: {},
-		e: []
-	}, x, y, i, z;
+		e: [],
+		tm: [],
+		ct: 0,
+		p: []
+	}, x, y, z, i;
 	for (y = 0; y < m.h + 2 * ay; ++y) {
 		c.t[y] = [2 * max(ay - y, 0)];
 		for (x = m.w - c.t[y][0]; x > 2 * max(y - 2 * ay - 2, 0); --x)
@@ -313,22 +383,18 @@ loadMap = m => {
 	for (i of m.x)
 		for (x of H(...i.p).iRad(i.r))
 			setT(c.t, x, tiles[i.t]);
-	// Place entities
-	for (x in m.e)
-		for (y of m.e[x])
-			i = {
-				i: ent[x],
-				p: H(...y.p)
-			},
-			i.d = i.i.d.bind(0, i),
-			i.de = i.i.de.bind(0, i),
-			i.i.m && (i.m = i.i.m.map(i => moves[i])),
-			i.h = y.h || i.i.h,
-			i.mh = y.mh || i.i.h,
-			c.ep[y.p] = i,
-			c.e.push(i);
-	c.e.d = 1;
-	c.p = [];
+	// Add teams, place entities
+	for (x of m.t) {
+		c.tm.push(z = {
+			n: x.n,
+			p: x.p,
+			ai: x.ai,
+			e: []
+		});
+		for (y in x.e)
+			for (i of x.e[y])
+				addEnt(c, ent[y], H(...i.p), z, i);
+	}
 	return c;
 };
 
@@ -340,29 +406,49 @@ setT = (m, {x, y}, t, r,c) => (
 		c > 0 && r[c] && (
 			r[c] = t)));
 
-strP = (x, y) => x + "," + y;
-
 vp = new DOMRect(-9e9, -9e9, c.width, c.height);
 sE = sM = sMB = 0;
-kE = [];
+
 selE = (e, m) => {
 	sE = e;
 	sM = 0;
 	sT = {};
 	f.innerHTML = "";
+	e && f.append(scaleCanvas(genTxt(e.i.n+"\n"+e.h+"/"+e.mh+" hp"), 4));
 	if (e && e.m) {
+		f.append(mov = cEl("p"))
 		for (m of e.m)
-			f.append(makeMoveB(m));
-		f.children[0].click()
+			mov.append(makeMoveB(m));
+		mov.children[0].click()
 	}
 	onresize();
 };
 
 compHexY = (a, b) => a.p.y + a.p.x/2 - b.p.y - b.p.x/2;
-moveEnt = (m, e, {x, y}) => {
+addEnt = (m, i, p, t, d) => (
+	i = {
+		i: i, p: p, m: m, t: t,
+		h: d.h || i.h,
+		mh: d.mh || i.h,
+	},
+	i.d = i.i.d.bind(0, i),
+	i.de = i.i.de.bind(0, i),
+	i.i.m && (i.m = i.i.m.map(i => moves[i])),
+	m.ep[p] = i,
+	m.e.push(i),
+	m.e.d = 1,
+	t.e.push(i),
+	i
+);
+moveEnt = (m, e, p) => {
 	delete m.ep[e.p];
-	e.p = H(x, y);
-	m.ep[e.p] = e;
+	m.ep[e.p = p] = e;
+	m.e.d = 1;
+};
+delEnt = (m, e) => {
+	delete m.ep[e.p];
+	m.e.splice(m.e.indexOf(e), 1);
+	e.t.e.splice(e.t.e.indexOf(e), 1);
 };
 
 clampVP = (v, b) => {
@@ -460,9 +546,9 @@ drawEnt = (e, i,x,y,s,h) => {
 		h = s ? 3 : 1,
 		g.fillStyle = "#000",
 		g.fillRect(x - 12, y + 5, 23, h + 2),
-		g.fillStyle = "#c00",
+		g.fillStyle = s ? "#b00" : "#e00",
 		g.fillRect(x - 11, y + 6, 21, h),
-		g.fillStyle = "#0a0",
+		g.fillStyle = s ? "#080" : "#0d0",
 		g.fillRect(x - 11, y + 6, (21 * i.h / i.mh)|0, h),
 		s && drawTxt(g, x, y + 5, i.h+"/"+i.mh, 0, snum, 1);
 	sM && sM.d(sE);
@@ -479,9 +565,13 @@ render = d => {
 	drawEnt(cM.e);
 	doParticles(cM);
 	
+	drawTxt(g, 1, 0, ""+mH);
+	
 	oldT = t;
 	requestAnimationFrame(render);
 };
+getFrame = (a, s=0) => (t - s) / a.d % a.f.length |0;
+
 createImageBitmap(new Blob([sa], {type: png})).then(s => {
 	s = makeCanvas(s.width, s.height, (g, n) => {
 		g.drawImage(s, 0, 0);
@@ -492,8 +582,8 @@ createImageBitmap(new Blob([sa], {type: png})).then(s => {
 			g.fillStyle = makeDGrad(g, n[1], n[3]),
 			g.fillRect(...n);
 	});
-	drawSprite = (g,n,x,y,c,b,o) => (
-		b = sb[n].b,
+	drawSprite = (g, n, x, y, c, f=-1, b,o) => (
+		b = sb[n].b || sb[n].f[f < 0 ? getFrame(sb[n], 0) : f],
 		o = sb[n].o || [0,0],
 		c = c || 1,
 		g.drawImage(s, ...b,
@@ -539,43 +629,56 @@ createImageBitmap(new Blob([sa], {type: png})).then(s => {
 	}, %%STARTUP_DELAY%%);
 });
 
-/* Mouse state:
- * 0 - Up
- * 1 - View drag
- */
+
+MOUSE_NONE = 0;
+MOUSE_VIEW_DRAG = 1;
+MOUSE_SEL_ENT = 2;
 mSt = 0;
 
 c.onmousedown = (e, t) => {
 	if (mSt == MOUSE_NONE && e.button == 0) {
-		if ((t = cM.ep[eToHex(e).round()]) && t.i.p && !t.k)
-			selE((sE == t) ? 0 : t);
+		if (cM.tm[cM.ct].p && (t = cM.ep[mH]) && t.t == cM.tm[cM.ct] && !t.k)
+			mSt = MOUSE_SEL_ENT;
 		else
-			mSt = MOUSE_VIEW_DRAG,
-			drStMX = e.pageX,
-			drStMY = e.pageY,
-			drStCX = vp.x,
-			drStCY = vp.y;
+			mSt = MOUSE_VIEW_DRAG;
+		drStMX = e.pageX;
+		drStMY = e.pageY;
+		drStCX = vp.x;
+		drStCY = vp.y;
 	}
 	
 	if (sE && e.button == 2 && sT[mH])
-		sM.r(sE),
+		sM.r(sE, mH),
 		selE(0);
 };
-onmousemove = (e, h) => {
+onmousemove = e => {
 	mH = eToHex(e).round();
 	
+	if (mSt)
+		var dx = (drStMX - e.pageX)/4 |0,
+		    dy = (drStMY - e.pageY)/4 |0;
+	
 	switch (mSt) {
+	case MOUSE_SEL_ENT:
+		if (dx || dy) mSt = MOUSE_VIEW_DRAG;
+		// Fall thru
 	case MOUSE_VIEW_DRAG:
-		vp.x = drStCX + (drStMX - e.pageX)/4 |0;
-		vp.y = drStCY + (drStMY - e.pageY)/4 |0;
+		vp.x = drStCX + dx;
+		vp.y = drStCY + dy;
 		clampVP(vp, cM.cb);
 		break;
 	}
 };
-onmouseup = e => {
+onmouseup = (e, t) => {
 	switch (mSt) {
+	case MOUSE_SEL_ENT:
+		if (e.button == 0)
+			selE((sE == (t = cM.ep[mH])) ? 0 : t),
+			mSt = MOUSE_NONE;
+		break;
 	case MOUSE_VIEW_DRAG:
-		if (e.button == 0) mSt = MOUSE_NONE;
+		if (e.button == 0)
+			mSt = MOUSE_NONE;
 		break;
 	}
 };
@@ -594,7 +697,7 @@ onwheel = e => {
 	if (sE) {
 		let d = e.deltaY,
 		    t = sMB[(d < 0 ? "next" : "previous") + "Sibling"];
-		if (!t) t = f[(d < 0 ? "first" : "last") + "Child"];
+		if (!t) t = mov[(d < 0 ? "first" : "last") + "Child"];
 		t.click()
 	}
 }

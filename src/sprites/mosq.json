@@ -1,0 +1,8 @@
+{
+	"anim": {
+		"numframes": 3,
+		"order": [0, 1, 2, 1],
+		"duration": 40
+	},
+	"origin": [8, 7]
+}
