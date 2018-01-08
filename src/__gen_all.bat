@@ -24,10 +24,11 @@ echo.
 if not defined DEV (
 	echo **COMPRESSING HTML FILE INTO PNG
 	python _html_to_png.py gen/uncompressed.html gen/index.html
+	cp gen/index.html ../docs/index.html
 	call :getsize gen/index.html
 ) else (
 	echo **COMPRESSING HTML FILE INTO PNG
-	python _html_to_png.py gen/uncompressed.html gen/index_c.html
+	python _html_to_png.py gen/uncompressed.html ../docs/index.html
 	call :getsize gen/index_c.html
 	echo.
 	echo **COPYING UNCOMPRESSED FILE FOR TESTING
