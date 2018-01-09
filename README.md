@@ -1,6 +1,8 @@
 # forg20k
 
-Play online: https://ajaxgb.github.io/forg20k/
+My submission to a [Gynvael's Winter GameDev Challenge 2017](http://gynvael.coldwind.pl/?id=668). The challenge was to make a turn-based strategy game that fit in 20KB and ran on the latest version of Chrome. No other browsers are guaranteed to be supported.
+
+Play online: **(Only guaranteed to work in latest version of Chrome)** https://ajaxgb.github.io/forg20k/
 
 - Left click to select FORGS.
 - A FORG's moves are listed at the bottom, along with HP and MP.
