@@ -1,5 +1,7 @@
 # forg20k
 
+Play online: https://ajaxgb.github.io/forg20k/
+
 - Left click to select FORGS.
 - A FORG's moves are listed at the bottom, along with HP and MP.
 - Click on moves or scroll between them with the mousewheel.
